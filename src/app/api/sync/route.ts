@@ -1,0 +1,233 @@
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+
+interface SyncOrderItemModifier {
+  modifierId: string;
+  unitPriceImpact: number;
+}
+
+interface SyncOrderItem {
+  id: string;
+  itemId: string;
+  qty: number;
+  unitPrice: number;
+  totalPrice: number;
+  comment?: string | null;
+  modifiers?: SyncOrderItemModifier[];
+}
+
+interface SyncOrder {
+  id: string;
+  receiptNumber?: string;
+  shiftId: string;
+  tableId?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  orderType: string; // "DINE_IN" | "TAKEAWAY"
+  paymentMethod: string; // "CASH" | "VISA" | "INSTAPAY" | "VODAFONE_CASH" | "CASH_OUT"
+  cashOutAmount?: number;
+  cashOutFee?: number;
+  status: string; // "COMPLETED" | "CANCELLED" | "REFUNDED"
+  subtotal: number;
+  discount: number;
+  discountReason?: string | null;
+  tax: number;
+  total: number;
+  returnStatus?: string;
+  returnedAmount?: number;
+  returnReason?: string | null;
+  createdAt: string;
+  items: SyncOrderItem[];
+}
+
+export async function POST(request: Request) {
+  try {
+    const { orders } = (await request.json()) as { orders: SyncOrder[] };
+
+    if (!orders || !Array.isArray(orders)) {
+      return NextResponse.json({ error: 'Invalid orders array' }, { status: 400 });
+    }
+
+    const validPaymentMethods = ['CASH', 'VISA', 'INSTAPAY', 'VODAFONE_CASH', 'CASH_OUT'];
+
+    const syncedIds: string[] = [];
+    const errors: { orderId: string; message: string }[] = [];
+
+    for (const order of orders) {
+      try {
+        if (!validPaymentMethods.includes(order.paymentMethod)) throw new Error('طريقة الدفع غير صالحة');
+        const paymentMethod = order.paymentMethod;
+        if (!Array.isArray(order.items) || (order.items.length === 0 && order.paymentMethod !== 'CASH_OUT')) throw new Error('الطلب لا يحتوي على أصناف');
+
+        // 1. Check if order already exists in the database
+        const existing = await prisma.salesOrder.findUnique({
+          where: { id: order.id },
+        });
+
+        if (existing) {
+          syncedIds.push(order.id);
+          continue; // Already synced
+        }
+
+        // 2. Wrap order insertion and stock deduction in a Prisma transaction
+        await prisma.$transaction(async (tx) => {
+          // Resolve any duplicate receipt number collision safely
+          let finalReceiptNumber = order.receiptNumber;
+          if (finalReceiptNumber) {
+            const existingReceipt = await tx.salesOrder.findUnique({
+              where: { receiptNumber: finalReceiptNumber },
+            });
+            if (existingReceipt && existingReceipt.id !== order.id) {
+              finalReceiptNumber = `${finalReceiptNumber}-${order.id.slice(0, 4).toUpperCase()}`;
+            }
+          }
+
+          // 2a. Validate and sanitize foreign keys to prevent P2003 constraints
+          const finalShiftId = order.shiftId;
+          const shiftExists = await tx.shift.findUnique({ where: { id: finalShiftId } });
+          if (!shiftExists) throw new Error('الوردية غير موجودة؛ لم تتم مزامنة الطلب');
+
+          const finalTableId = order.tableId || null;
+          if (finalTableId) {
+            const tableExists = await tx.table.findUnique({ where: { id: finalTableId } });
+            if (!tableExists) throw new Error('الطاولة غير موجودة');
+          }
+
+          const finalCustomerId = order.customerId || null;
+          if (finalCustomerId) {
+            const customerExists = await tx.customer.findUnique({ where: { id: finalCustomerId } });
+            if (!customerExists) throw new Error('العميل غير موجود');
+          }
+
+          // 2b. Sanitize items and modifiers
+          const sanitizedItems = [];
+          for (const item of order.items || []) {
+            const validItemId = item.itemId;
+            const itemExists = await tx.item.findUnique({ where: { id: validItemId } });
+            if (!itemExists) throw new Error('صنف الطلب غير موجود');
+            if (!Number.isInteger(item.qty) || item.qty <= 0) throw new Error('كمية الصنف غير صالحة');
+
+            const validModifiers = [];
+            for (const mod of item.modifiers || []) {
+              const modExists = await tx.modifier.findUnique({ where: { id: mod.modifierId } });
+              if (!modExists) throw new Error('إضافة الصنف غير موجودة');
+              if (modExists) {
+                validModifiers.push({
+                  modifierId: mod.modifierId,
+                  unitPriceImpact: mod.unitPriceImpact,
+                });
+              }
+            }
+
+            sanitizedItems.push({
+              id: item.id,
+              itemId: validItemId,
+              qty: item.qty,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+              comment: item.comment?.trim() || null,
+              modifiers: {
+                create: validModifiers,
+              },
+            });
+          }
+
+          // Create the sales order
+          await tx.salesOrder.create({
+            data: {
+              id: order.id,
+              receiptNumber: finalReceiptNumber,
+              shiftId: finalShiftId,
+              tableId: finalTableId,
+              customerId: finalCustomerId,
+              customerName: order.customerName || null,
+              orderType: order.orderType,
+              paymentMethod,
+              cashOutAmount: order.cashOutAmount || 0,
+              cashOutFee: order.cashOutFee || 0,
+              status: order.status,
+              subtotal: order.subtotal,
+              discount: order.discount,
+              discountReason: order.discountReason || null,
+              tax: order.tax,
+              total: order.total,
+              returnStatus: order.returnStatus || 'NONE',
+              returnedAmount: order.returnedAmount || 0,
+              returnReason: order.returnReason || null,
+              createdAt: new Date(order.createdAt),
+              items: {
+                create: sanitizedItems,
+              },
+            },
+          });
+
+          // Only perform inventory deduction if order is COMPLETED
+          if (order.status === 'COMPLETED') {
+            for (const item of order.items) {
+              // Deduct recipe for the item
+              const recipeIngredients = await tx.recipe.findMany({
+                where: { itemId: item.itemId },
+              });
+
+              for (const ing of recipeIngredients) {
+                const totalDeduct = ing.quantity * item.qty;
+                await tx.rawMaterial.update({
+                  where: { id: ing.rawMaterialId },
+                  data: {
+                    stockQty: {
+                      decrement: totalDeduct,
+                    },
+                  },
+                });
+              }
+
+              // Deduct recipes for any modifiers
+              if (item.modifiers) {
+                for (const mod of item.modifiers) {
+                  const modIngredients = await tx.recipeModifier.findMany({
+                    where: { modifierId: mod.modifierId },
+                  });
+
+                  for (const ing of modIngredients) {
+                    const totalDeduct = ing.quantity * item.qty; // Deducted per item quantity
+                    await tx.rawMaterial.update({
+                      where: { id: ing.rawMaterialId },
+                      data: {
+                        stockQty: {
+                          decrement: totalDeduct,
+                        },
+                      },
+                    });
+                  }
+                }
+              }
+            }
+          }
+
+          // Update Table status to VACANT if it was Dine-In and completed
+          if (order.orderType === 'DINE_IN' && finalTableId && order.status === 'COMPLETED') {
+            await tx.table.update({
+              where: { id: finalTableId },
+              data: { status: 'VACANT' },
+            });
+          }
+        });
+
+        syncedIds.push(order.id);
+      } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+        console.error(`Error syncing order ${order.id}:`, err);
+        errors.push({ orderId: order.id, message: err.message || 'Sync transaction failed' });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      syncedIds,
+      errors,
+    });
+  } catch (error) {
+    console.error('Batch sync endpoint error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
