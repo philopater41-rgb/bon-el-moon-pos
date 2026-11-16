@@ -84,7 +84,8 @@ try {
       & node.exe scripts/initialize-new-db.mjs $schemaSql
       Require-Exit 'Creating initial users and tables'
     }
-    & npm.cmd run build
+    # Webpack avoids Turbopack junctions that point to the temporary staging path.
+    & node.exe node_modules/next/dist/bin/next build --webpack
     Require-Exit 'Building the application'
   } finally { Pop-Location }
   Step 'Activating the new version'

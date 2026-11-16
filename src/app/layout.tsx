@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
-import { Outfit, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { OfflineShellRegistration } from "./offline-shell";
 
-const outfit = Outfit({
+const outfit = localFont({
+  src: "./fonts/outfit-latin.woff2",
   variable: "--font-outfit",
-  subsets: ["latin"],
+  weight: "100 900",
 });
 
-const inter = Inter({
+const inter = localFont({
+  src: "./fonts/inter-latin.woff2",
   variable: "--font-inter",
-  subsets: ["latin"],
+  weight: "100 900",
 });
 
 export const metadata: Metadata = {
