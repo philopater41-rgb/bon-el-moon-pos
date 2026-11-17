@@ -162,6 +162,7 @@ export default function POSPage() {
   const [closedVisa, setClosedVisa] = useState('');
   const [closedVodafoneCash, setClosedVodafoneCash] = useState('');
   const [cashierName, setCashierName] = useState('');
+  const [savedCashierNames, setSavedCashierNames] = useState<Array<{ id: string; name: string }>>([]);
 
   // Expense inputs
   const [expenseAmount, setExpenseAmount] = useState('');
@@ -200,7 +201,21 @@ export default function POSPage() {
       }
     };
 
+    // Fetch saved cashier names
+    const fetchCashierNames = async () => {
+      try {
+        const res = await fetch('/api/cashier-names');
+        if (res.ok) {
+          const data = await res.json();
+          setSavedCashierNames(data.cashierNames || []);
+        }
+      } catch (e) {
+        console.error('Failed to fetch cashier names:', e);
+      }
+    };
+
     checkServerShift();
+    fetchCashierNames();
   }, [setActiveShift]);
 
   // Do not replace local totals with server totals while sales are pending.
@@ -862,6 +877,12 @@ export default function POSPage() {
       if (!res.ok) throw new Error(data.error || 'فشل فتح الوردية');
 
       setActiveShift(data.shift);
+      setSavedCashierNames((prev) => {
+        if (!prev.some((c) => c.name === finalCashierName)) {
+          return [...prev, { id: finalCashierName, name: finalCashierName }];
+        }
+        return prev;
+      });
       setShowOpenShift(false);
       triggerAlert('success', `تم فتح الوردية بنجاح! أهلاً بك يا ${finalCashierName}`);
     } catch (caught: unknown) {
@@ -1852,6 +1873,23 @@ export default function POSPage() {
                     placeholder={user?.name || "اكتب اسم الكاشير"}
                     className="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 px-3 text-white text-xs text-right placeholder-gray-500 focus:border-cyan-500"
                   />
+
+                  {/* Quick Select Saved Cashier Names */}
+                  {savedCashierNames.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="text-[10px] text-gray-400 w-full">أسماء سريعة:</span>
+                      {savedCashierNames.map((cn) => (
+                        <button
+                          key={cn.id}
+                          type="button"
+                          onClick={() => setCashierName(cn.name)}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-cyan-500/20 text-gray-300 hover:text-cyan-300 border border-white/10 text-xs transition-all active:scale-95"
+                        >
+                          {cn.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
