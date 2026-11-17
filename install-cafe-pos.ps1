@@ -249,10 +249,16 @@ try {
 
   Write-Host "`n====================================================" -ForegroundColor Green
   Write-Host "  تم تثبيت وتجهيز BON el MOON POS بنجاح!" -ForegroundColor Green
-  Write-Host "  يمكنك الآن تشغيل البرنامج مباشرة من سطح المكتب." -ForegroundColor Green
+  Write-Host "  جاري تشغيل البرنامج تلقائياً الآن..." -ForegroundColor Green
   Write-Host "====================================================" -ForegroundColor Green
   if (Test-Path -LiteralPath $previous) {
     Write-Host "ملاحظة: تم حفظ النسخة السابقة احتياطياً في: $previous" -ForegroundColor Gray
+  }
+
+  # Launch the POS application automatically
+  $launcher = Join-Path $app 'start-pos.bat'
+  if (Test-Path -LiteralPath $launcher) {
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$launcher`"" -WorkingDirectory $app
   }
 } catch {
   Write-Host "`n====================================================" -ForegroundColor Red

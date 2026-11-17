@@ -237,6 +237,16 @@ export default function POSPage() {
     return () => window.removeEventListener('bon-sync-completed', refreshShift);
   }, [showCloseShift, setActiveShift]);
 
+  // Auto-close print modal when silent printing completes
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setShowPrintModal(false);
+      setReceiptOrder(null);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, []);
+
   const handleAutoFillExpected = () => {
     if (!activeShift) return;
     setClosedCash(String((activeShift.expectedCash || 0).toFixed(2)));
@@ -786,6 +796,10 @@ export default function POSPage() {
       setShowPrintModal(true);
       setTimeout(() => {
         window.print();
+        setTimeout(() => {
+          setShowPrintModal(false);
+          setReceiptOrder(null);
+        }, 800);
       }, 150);
 
       triggerAlert('success', 'تم حفظ الأوردر وتقفيل الحساب!');

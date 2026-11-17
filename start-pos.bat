@@ -27,6 +27,9 @@ if errorlevel 1 (
 
 :: 3. Open POS in Kiosk Printing mode with dedicated profile (guarantees silent instant printing without preview dialog)
 echo [+] Opening POS window with Silent Thermal Printing...
-start msedge --kiosk-printing --user-data-dir="%LOCALAPPDATA%\BonElMoonPOS\edge-pos-profile" --app=http://localhost:3000 2>nul || start chrome --kiosk-printing --user-data-dir="%LOCALAPPDATA%\BonElMoonPOS\chrome-pos-profile" --app=http://localhost:3000 2>nul || start http://localhost:3000
+set "EDGE_FLAGS=--kiosk-printing --user-data-dir="%LOCALAPPDATA%\BonElMoonPOS\edge-pos-profile" --no-first-run --no-default-browser-check --disable-features=Translate --app=http://localhost:3000"
+set "CHROME_FLAGS=--kiosk-printing --user-data-dir="%LOCALAPPDATA%\BonElMoonPOS\chrome-pos-profile" --no-first-run --no-default-browser-check --disable-features=Translate --app=http://localhost:3000"
+
+start msedge %EDGE_FLAGS% 2>nul || start chrome %CHROME_FLAGS% 2>nul || start http://localhost:3000
 
 exit
