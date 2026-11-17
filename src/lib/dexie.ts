@@ -136,7 +136,7 @@ export interface LocalOrderReturn {
   syncStatus: 'PENDING' | 'SYNCED' | 'FAILED';
 }
 
-class DayNightOfflineDB extends Dexie {
+class BonElMoonOfflineDB extends Dexie {
   categories!: DexieTable<LocalCategory, string>;
   items!: DexieTable<LocalItem, string>;
   modifiers!: DexieTable<LocalModifier, string>;
@@ -149,7 +149,7 @@ class DayNightOfflineDB extends Dexie {
   orderReturns!: DexieTable<LocalOrderReturn, string>;
 
   constructor() {
-    super('DayNightOfflineDB');
+    super('BonElMoonOfflineDB');
     this.version(1).stores({
       categories: 'id, name',
       items: 'id, name, categoryId',
@@ -174,4 +174,4 @@ class DayNightOfflineDB extends Dexie {
   }
 }
 
-export const offlineDB = new DayNightOfflineDB();
+export const offlineDB = new BonElMoonOfflineDB();

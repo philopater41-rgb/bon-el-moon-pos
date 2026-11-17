@@ -232,7 +232,7 @@ async function runExhaustiveTest() {
     const res = await syncPost(jsonReq('http://localhost:3000/api/sync', 'POST', {
       orders: [{
         id: dineInOrderId,
-        receiptNumber: `DN-DINEIN-${Date.now().toString().slice(-4)}`,
+        receiptNumber: `BON-DINEIN-${Date.now().toString().slice(-4)}`,
         shiftId: posShift.id,
         tableId: table.id,
         customerId: testCust?.id,
@@ -275,7 +275,7 @@ async function runExhaustiveTest() {
     const res = await syncPost(jsonReq('http://localhost:3000/api/sync', 'POST', {
       orders: [{
         id: takeawayOrderId,
-        receiptNumber: `DN-TK-${Date.now().toString().slice(-4)}`,
+        receiptNumber: `BON-TK-${Date.now().toString().slice(-4)}`,
         shiftId: posShift.id,
         tableId: null,
         orderType: 'TAKEAWAY',
@@ -310,7 +310,7 @@ async function runExhaustiveTest() {
     const res = await syncPost(jsonReq('http://localhost:3000/api/sync', 'POST', {
       orders: [{
         id: cashOutOrderId,
-        receiptNumber: `DN-COUT-${Date.now().toString().slice(-4)}`,
+        receiptNumber: `BON-COUT-${Date.now().toString().slice(-4)}`,
         shiftId: posShift.id,
         tableId: null,
         orderType: 'TAKEAWAY',

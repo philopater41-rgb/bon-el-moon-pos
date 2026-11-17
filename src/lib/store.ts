@@ -36,26 +36,26 @@ interface AppStore {
 }
 
 export const useAppStore = create<AppStore>((set) => ({
-  user: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('dn_user') || 'null') : null,
-  activeShift: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('dn_shift') || 'null') : null,
+  user: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('bon_user') || 'null') : null,
+  activeShift: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('bon_shift') || 'null') : null,
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
   activeHallId: null,
   activeTableId: null,
 
   setUser: (user) => {
     if (user) {
-      localStorage.setItem('dn_user', JSON.stringify(user));
+      localStorage.setItem('bon_user', JSON.stringify(user));
     } else {
-      localStorage.removeItem('dn_user');
+      localStorage.removeItem('bon_user');
     }
     set({ user });
   },
 
   setActiveShift: (shift) => {
     if (shift) {
-      localStorage.setItem('dn_shift', JSON.stringify(shift));
+      localStorage.setItem('bon_shift', JSON.stringify(shift));
     } else {
-      localStorage.removeItem('dn_shift');
+      localStorage.removeItem('bon_shift');
     }
     set({ activeShift: shift });
   },
@@ -67,8 +67,8 @@ export const useAppStore = create<AppStore>((set) => ({
   setActiveTableId: (activeTableId) => set({ activeTableId }),
 
   logout: () => {
-    localStorage.removeItem('dn_user');
-    localStorage.removeItem('dn_shift');
+    localStorage.removeItem('bon_user');
+    localStorage.removeItem('bon_shift');
     set({ user: null, activeShift: null, activeHallId: null, activeTableId: null });
   },
 }));

@@ -230,7 +230,7 @@ try {
     $shortcut.TargetPath = Join-Path $app 'start-pos.bat'
     $shortcut.WorkingDirectory = $app
     $shortcut.Description = 'تشغيل نظام كاشير BON el MOON'
-    $icon = Join-Path $app 'day-night-pos.ico'
+    $icon = Join-Path $app 'bon-pos.ico'
     if (Test-Path -LiteralPath $icon) {
       $shortcut.IconLocation = "$icon,0"
     }

@@ -107,7 +107,7 @@ async function simulateDay() {
     orders: [
       {
         id: dineInOrderId,
-        receiptNumber: `DN-${Date.now().toString().slice(-6)}`,
+        receiptNumber: `BON-${Date.now().toString().slice(-6)}`,
         shiftId: currentShift.id,
         tableId: activeTable.id,
         customerId: customer?.id || null,
@@ -159,7 +159,7 @@ async function simulateDay() {
     orders: [
       {
         id: cashOrderId,
-        receiptNumber: `DN-${Date.now().toString().slice(-6)}`,
+        receiptNumber: `BON-${Date.now().toString().slice(-6)}`,
         shiftId: currentShift.id,
         tableId: null,
         orderType: 'TAKEAWAY',
@@ -198,7 +198,7 @@ async function simulateDay() {
     orders: [
       {
         id: visaOrderId,
-        receiptNumber: `DN-${Date.now().toString().slice(-6)}`,
+        receiptNumber: `BON-${Date.now().toString().slice(-6)}`,
         shiftId: currentShift.id,
         tableId: null,
         orderType: 'TAKEAWAY',
@@ -240,7 +240,7 @@ async function simulateDay() {
     orders: [
       {
         id: cashOutOrderId,
-        receiptNumber: `DN-CASHOUT-${Date.now().toString().slice(-4)}`,
+        receiptNumber: `BON-CASHOUT-${Date.now().toString().slice(-4)}`,
         shiftId: currentShift.id,
         tableId: null,
         orderType: 'TAKEAWAY',

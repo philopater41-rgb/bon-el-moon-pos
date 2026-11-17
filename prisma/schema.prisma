@@ -222,7 +222,7 @@ model PurchaseInvoiceItem {
 // 8. Sales Orders & Items
 model SalesOrder {
   id             String   @id @default(uuid())
-  receiptNumber  String?  @unique // Friendly daily receipt reference, e.g. DN-20260715-0001
+  receiptNumber  String?  @unique // Friendly daily receipt reference, e.g. BON-20260715-0001
   shiftId        String
   shift          Shift    @relation(fields: [shiftId], references: [id])
   tableId        String?

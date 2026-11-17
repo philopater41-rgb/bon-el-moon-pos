@@ -80,7 +80,7 @@ const generateReceiptNumber = (): string => {
     now.getFullYear(),
   ].join('-');
   const counterKey = `bon_receipt_counter_${dateKey}`;
-  const nextNumber = Number.parseInt(localStorage.getItem(counterKey) || localStorage.getItem(`dn_receipt_counter_${dateKey}`) || '0', 10) + 1;
+  const nextNumber = Number.parseInt(localStorage.getItem(counterKey) || '0', 10) + 1;
   localStorage.setItem(counterKey, String(nextNumber));
   return `BON-${receiptDate}-${String(nextNumber).padStart(4, '0')}`;
 };
@@ -325,7 +325,7 @@ export default function POSPage() {
               String(now.getDate()).padStart(2, '0'),
             ].join('');
             const counterKey = `bon_receipt_counter_${dateKey}`;
-            const currentLocal = Number.parseInt(localStorage.getItem(counterKey) || localStorage.getItem(`dn_receipt_counter_${dateKey}`) || '0', 10);
+            const currentLocal = Number.parseInt(localStorage.getItem(counterKey) || '0', 10);
             if (data.todayOrdersCount > currentLocal) {
               localStorage.setItem(counterKey, String(data.todayOrdersCount));
             }
@@ -1764,7 +1764,7 @@ export default function POSPage() {
                       value={returnSearchQuery}
                       onChange={(e) => setReturnSearchQuery(e.target.value)}
                       className="w-full bg-slate-900 border border-white/10 rounded-xl pr-9 pl-4 py-2 text-xs text-white text-right"
-                      placeholder="ابحث برقم الإيصال (مثال: DN-...)..."
+                      placeholder="ابحث برقم الإيصال (مثال: BON-...)..."
                     />
                   </div>
 
