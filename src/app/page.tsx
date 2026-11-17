@@ -75,7 +75,6 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold tracking-tight text-white bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-400">
             BON el MOON
           </h1>
-          <p className="text-sm text-gray-400 mt-1">بوابة نظام الكاشير والإدارة المتقدم</p>
         </div>
 
         {error && (
