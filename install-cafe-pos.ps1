@@ -4,7 +4,8 @@
   [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'BonElMoonPOS'),
   [string]$DatabaseUrl = '',
   [string]$DatabaseUrlPooled = '',
-  [switch]$SkipShortcuts
+  [switch]$SkipShortcuts,
+  [switch]$SkipLaunch
 )
 $ErrorActionPreference = 'Stop'
 $root = $InstallRoot
@@ -258,10 +259,12 @@ try {
     Write-Host "ملاحظة: تم حفظ النسخة السابقة احتياطياً في: $previous" -ForegroundColor Gray
   }
 
-  # Launch the POS application automatically
-  $launcher = Join-Path $app 'start-pos.bat'
-  if (Test-Path -LiteralPath $launcher) {
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$launcher`"" -WorkingDirectory $app
+  # Launch the POS application automatically unless skipped
+  if (-not $SkipLaunch) {
+    $launcher = Join-Path $app 'start-pos.bat'
+    if (Test-Path -LiteralPath $launcher) {
+      Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$launcher`"" -WorkingDirectory $app
+    }
   }
 } catch {
   Write-Host "`n====================================================" -ForegroundColor Red
