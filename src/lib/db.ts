@@ -5,7 +5,7 @@ declare global {
 }
 
 function getPrismaClient(): PrismaClient {
-  const dbUrl = process.env.DATABASE_URL || 'file:dev.db';
+  const dbUrl = process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL || 'file:dev.db';
 
   if (dbUrl.startsWith('postgresql:') || dbUrl.startsWith('postgres:')) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports

@@ -47,9 +47,12 @@ next-env.d.ts
 # Local operating data and development artifacts must never be published.
 /backups/
 /tmp/
+/scripts/
+/inject-all-features.js
 /.codex-tmp-menu/
 *.db-wal
 *.db-shm
 *.sqlite*
 *.zip
 *.xlsx
+.neon

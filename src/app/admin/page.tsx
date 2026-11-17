@@ -12,8 +12,9 @@ import {
   Calendar, PlusCircle, ShoppingBag, X, Pencil,
   CreditCard, RotateCcw, UserPlus, Tag, 
   FileText, Download, BarChart3, Receipt, Truck,
-  Eye, Printer
+  Eye, Printer, Database
 } from 'lucide-react';
+import { NeonSpinner, NeonBadge } from '@/components/NeonSpinner';
 
 const subscribeHydration = () => () => {};
 const getClientSnapshot = () => true;
@@ -262,6 +263,11 @@ export default function AdminPage() {
   const [expensesTodayTotal, setExpensesTodayTotal] = useState(0);
   const [expensesGrandTotal, setExpensesGrandTotal] = useState(0);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [loadingPurchases, setLoadingPurchases] = useState(false);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [loadingCosts, setLoadingCosts] = useState(false);
+  const [loadingInventory, setLoadingInventory] = useState(false);
   const [expenseSearchQuery, setExpenseSearchQuery] = useState('');
   const [showAddAdminExpenseModal, setShowAddAdminExpenseModal] = useState(false);
   const [adminExpenseAmount, setAdminExpenseAmount] = useState('');
@@ -336,6 +342,7 @@ export default function AdminPage() {
 
   // Fetch Dashboard Analytics
   const fetchAnalytics = useCallback(async () => {
+    setLoadingAnalytics(true);
     try {
       const res = await fetch('/api/admin-analytics');
       if (res.ok) {
@@ -354,11 +361,14 @@ export default function AdminPage() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoadingAnalytics(false);
     }
   }, []);
 
   // Fetch Suppliers & Purchases
   const fetchSuppliersAndPurchases = useCallback(async () => {
+    setLoadingPurchases(true);
     try {
       const [sRes, pRes] = await Promise.all([fetch('/api/suppliers'), fetch('/api/purchases')]);
       if (sRes.ok) {
@@ -371,11 +381,14 @@ export default function AdminPage() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoadingPurchases(false);
     }
   }, []);
 
   // Fetch Customers & Discount Reasons
   const fetchCustomersAndReasons = useCallback(async () => {
+    setLoadingCustomers(true);
     try {
       const [cRes, rRes] = await Promise.all([fetch('/api/customers'), fetch('/api/discount-reasons')]);
       if (cRes.ok) {
@@ -388,11 +401,14 @@ export default function AdminPage() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoadingCustomers(false);
     }
   }, []);
 
   // Fetch Product Costs
   const fetchProductCosts = useCallback(async () => {
+    setLoadingCosts(true);
     try {
       const res = await fetch('/api/product-costs');
       if (res.ok) {
@@ -402,11 +418,14 @@ export default function AdminPage() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoadingCosts(false);
     }
   }, []);
 
   // Fetch Inventory & Raw Materials
   const fetchInventory = useCallback(async () => {
+    setLoadingInventory(true);
     try {
       const res = await fetch('/api/inventory');
       if (res.ok) {
@@ -415,6 +434,8 @@ export default function AdminPage() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoadingInventory(false);
     }
   }, []);
 
@@ -1270,6 +1291,9 @@ export default function AdminPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {(loadingAnalytics || loadingPurchases || loadingCustomers || loadingCosts || loadingInventory || loadingLedger || loadingExpenses || loadingReport) && (
+              <NeonBadge label="جاري تحديث البيانات..." />
+            )}
             <button
               onClick={() => {
                 fetchAnalytics();
@@ -1294,6 +1318,21 @@ export default function AdminPage() {
           {/* TAB 1: DASHBOARD */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
+              {loadingAnalytics && (
+                <div className="glass-panel p-3.5 rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-slate-900/60 to-purple-950/40 flex items-center justify-between shadow-lg animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/30">
+                      <Database className="w-4 h-4 text-cyan-300 animate-pulse" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white block">جاري تحميل البيانات المالية والتحليلات...</span>
+                      <span className="text-[10px] text-cyan-400/80">يتم جلب مبيعات اليوم وصافي الأرباح والمدفوعات لحظياً</span>
+                    </div>
+                  </div>
+                  <div className="w-5 h-5 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shrink-0" />
+                </div>
+              )}
+
               {/* Top Financial KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="glass-panel p-4 rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-950/20 to-transparent">
@@ -1698,8 +1737,8 @@ export default function AdminPage() {
                       <tbody className="divide-y divide-white/5">
                         {loadingLedger ? (
                           <tr>
-                            <td colSpan={7} className="p-8 text-center text-gray-400">
-                              جاري تحميل سجل الأيام...
+                            <td colSpan={7}>
+                              <NeonSpinner label="جاري تحميل سجل مبيعات الأيام..." />
                             </td>
                           </tr>
                         ) : filteredDays.length === 0 ? (
@@ -1820,8 +1859,8 @@ export default function AdminPage() {
                       <tbody className="divide-y divide-white/5">
                         {loadingLedger ? (
                           <tr>
-                            <td colSpan={8} className="p-8 text-center text-gray-400">
-                              جاري تحميل سجل الشهور...
+                            <td colSpan={8}>
+                              <NeonSpinner label="جاري تحميل سجل مبيعات الشهور..." />
                             </td>
                           </tr>
                         ) : filteredMonths.length === 0 ? (
@@ -1957,26 +1996,40 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {suppliers.map((s) => (
-                        <tr key={s.id} className="hover:bg-white/5">
-                          <td className="p-3 font-semibold text-white">{s.name}</td>
-                          <td className="p-3 text-gray-300">{s.companyName || '-'}</td>
-                          <td className="p-3 text-gray-400 font-mono">{s.phone || '-'}</td>
-                          <td className="p-3 font-mono text-cyan-400">EGP {s.totalPurchases?.toFixed(2) || '0.00'}</td>
-                          <td className="p-3 font-mono text-emerald-400">EGP {s.totalPaid?.toFixed(2) || '0.00'}</td>
-                          <td className="p-3 font-mono font-bold text-rose-400">EGP {s.remainingBalance?.toFixed(2) || '0.00'}</td>
-                          <td className="p-3 text-center">
-                            <button
-                              onClick={() => handleDeleteSupplier(s.id, s.name)}
-                              className="px-2 py-1 rounded-lg text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
-                              title="حذف المورد"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>مسح</span>
-                            </button>
+                      {loadingPurchases ? (
+                        <tr>
+                          <td colSpan={7}>
+                            <NeonSpinner label="جاري تحميل قائمة الموردين..." />
                           </td>
                         </tr>
-                      ))}
+                      ) : suppliers.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-gray-500">
+                            لا يوجد موردين مسجلين حالياً
+                          </td>
+                        </tr>
+                      ) : (
+                        suppliers.map((s) => (
+                          <tr key={s.id} className="hover:bg-white/5">
+                            <td className="p-3 font-semibold text-white">{s.name}</td>
+                            <td className="p-3 text-gray-300">{s.companyName || '-'}</td>
+                            <td className="p-3 text-gray-400 font-mono">{s.phone || '-'}</td>
+                            <td className="p-3 font-mono text-cyan-400">EGP {s.totalPurchases?.toFixed(2) || '0.00'}</td>
+                            <td className="p-3 font-mono text-emerald-400">EGP {s.totalPaid?.toFixed(2) || '0.00'}</td>
+                            <td className="p-3 font-mono font-bold text-rose-400">EGP {s.remainingBalance?.toFixed(2) || '0.00'}</td>
+                            <td className="p-3 text-center">
+                              <button
+                                onClick={() => handleDeleteSupplier(s.id, s.name)}
+                                className="px-2 py-1 rounded-lg text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
+                                title="حذف المورد"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>مسح</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2001,40 +2054,54 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {purchaseInvoices.map((inv) => (
-                        <tr key={inv.id} className="hover:bg-white/5">
-                          <td className="p-3 font-mono font-bold text-white">{inv.invoiceNumber}</td>
-                          <td className="p-3 text-cyan-300">{inv.supplier?.name || inv.supplierName || 'مورد عام'}</td>
-                          <td className="p-3 text-gray-400">{new Date(inv.invoiceDate).toLocaleDateString()}</td>
-                          <td className="p-3">
-                            <span className="text-gray-300">{inv.items?.map((it) => `${it.itemName} (${it.quantity} ${it.purchaseUnit})`).join(', ')}</span>
-                          </td>
-                          <td className="p-3 text-gray-300">{inv.paymentMethod}</td>
-                          <td className="p-3 font-mono font-bold text-white">EGP {inv.totalAmount.toFixed(2)}</td>
-                          <td className="p-3 font-mono text-emerald-400">EGP {inv.paidAmount.toFixed(2)}</td>
-                          <td className="p-3 font-mono text-rose-400">EGP {inv.remainingAmount.toFixed(2)}</td>
-                          <td className="p-3 text-center">
-                            {inv.remainingAmount > 0 ? (
-                              <button
-                                onClick={() => {
-                                  setSelectedInvoiceToPay(inv);
-                                  setPaymentAmountInput(inv.remainingAmount.toString());
-                                  setPaymentMethodInput(inv.paymentMethod === 'DEFERRED' ? 'CASH' : inv.paymentMethod);
-                                  setShowPayModal(true);
-                                }}
-                                className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold hover:bg-emerald-500/30 inline-flex items-center gap-1 shadow-sm transition-all active:scale-95"
-                              >
-                                <DollarSign className="w-3.5 h-3.5" />
-                                <span>تسديد دفعة</span>
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg font-semibold border border-emerald-500/20 inline-block">
-                                مسددة بالكامل ✓
-                              </span>
-                            )}
+                      {loadingPurchases ? (
+                        <tr>
+                          <td colSpan={9}>
+                            <NeonSpinner label="جاري تحميل فواتير المشتريات..." />
                           </td>
                         </tr>
-                      ))}
+                      ) : purchaseInvoices.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="p-8 text-center text-gray-500">
+                            لا توجد فواتير مشتريات مسجلة حالياً
+                          </td>
+                        </tr>
+                      ) : (
+                        purchaseInvoices.map((inv) => (
+                          <tr key={inv.id} className="hover:bg-white/5">
+                            <td className="p-3 font-mono font-bold text-white">{inv.invoiceNumber}</td>
+                            <td className="p-3 text-cyan-300">{inv.supplier?.name || inv.supplierName || 'مورد عام'}</td>
+                            <td className="p-3 text-gray-400">{new Date(inv.invoiceDate).toLocaleDateString()}</td>
+                            <td className="p-3">
+                              <span className="text-gray-300">{inv.items?.map((it) => `${it.itemName} (${it.quantity} ${it.purchaseUnit})`).join(', ')}</span>
+                            </td>
+                            <td className="p-3 text-gray-300">{inv.paymentMethod}</td>
+                            <td className="p-3 font-mono font-bold text-white">EGP {inv.totalAmount.toFixed(2)}</td>
+                            <td className="p-3 font-mono text-emerald-400">EGP {inv.paidAmount.toFixed(2)}</td>
+                            <td className="p-3 font-mono text-rose-400">EGP {inv.remainingAmount.toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              {inv.remainingAmount > 0 ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedInvoiceToPay(inv);
+                                    setPaymentAmountInput(inv.remainingAmount.toString());
+                                    setPaymentMethodInput(inv.paymentMethod === 'DEFERRED' ? 'CASH' : inv.paymentMethod);
+                                    setShowPayModal(true);
+                                  }}
+                                  className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold hover:bg-emerald-500/30 inline-flex items-center gap-1 shadow-sm transition-all active:scale-95"
+                                >
+                                  <DollarSign className="w-3.5 h-3.5" />
+                                  <span>تسديد دفعة</span>
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg font-semibold border border-emerald-500/20 inline-block">
+                                  مسددة بالكامل ✓
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2077,35 +2144,49 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {customers.map((c) => (
-                        <tr key={c.id} className="hover:bg-white/5">
-                          <td className="p-3 font-semibold text-white">{c.name}</td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[10px]">
-                              {c.type === 'COMPANY' && 'شركة / مؤسسة'}
-                              {c.type === 'HOSPITAL' && 'مستشفى / أطباء'}
-                              {c.type === 'CAFE' && 'كافيه / مطعم'}
-                              {c.type === 'INDIVIDUAL' && 'زبون مميز'}
-                              {c.type === 'OTHER' && 'أخرى'}
-                            </span>
-                          </td>
-                          <td className="p-3 font-mono text-gray-400">{c.phone || '-'}</td>
-                          <td className="p-3 font-bold text-amber-400">{c.discountRate}%</td>
-                          <td className="p-3 text-gray-300">{c.totalOrders || 0}</td>
-                          <td className="p-3 font-mono text-cyan-400">EGP {c.totalSpent?.toFixed(2) || '0.00'}</td>
-                          <td className="p-3 font-mono text-rose-400">EGP {c.totalDiscountReceived?.toFixed(2) || '0.00'}</td>
-                          <td className="p-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCustomer(c.id, c.name)}
-                              className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
-                              title="حذف العميل"
-                            >
-                              <Trash2 className="w-4 h-4 mx-auto" />
-                            </button>
+                      {loadingCustomers ? (
+                        <tr>
+                          <td colSpan={8}>
+                            <NeonSpinner label="جاري تحميل قاعدة بيانات العملاء..." />
                           </td>
                         </tr>
-                      ))}
+                      ) : customers.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="p-8 text-center text-gray-500">
+                            لا يوجد عملاء مسجلين حالياً
+                          </td>
+                        </tr>
+                      ) : (
+                        customers.map((c) => (
+                          <tr key={c.id} className="hover:bg-white/5">
+                            <td className="p-3 font-semibold text-white">{c.name}</td>
+                            <td className="p-3">
+                              <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[10px]">
+                                {c.type === 'COMPANY' && 'شركة / مؤسسة'}
+                                {c.type === 'HOSPITAL' && 'مستشفى / أطباء'}
+                                {c.type === 'CAFE' && 'كافيه / مطعم'}
+                                {c.type === 'INDIVIDUAL' && 'زبون مميز'}
+                                {c.type === 'OTHER' && 'أخرى'}
+                              </span>
+                            </td>
+                            <td className="p-3 font-mono text-gray-400">{c.phone || '-'}</td>
+                            <td className="p-3 font-bold text-amber-400">{c.discountRate}%</td>
+                            <td className="p-3 text-gray-300">{c.totalOrders || 0}</td>
+                            <td className="p-3 font-mono text-cyan-400">EGP {c.totalSpent?.toFixed(2) || '0.00'}</td>
+                            <td className="p-3 font-mono text-rose-400">EGP {c.totalDiscountReceived?.toFixed(2) || '0.00'}</td>
+                            <td className="p-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCustomer(c.id, c.name)}
+                                className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+                                title="حذف العميل"
+                              >
+                                <Trash2 className="w-4 h-4 mx-auto" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2183,53 +2264,67 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {returnsLog.map((ret) => (
-                        <tr key={ret.id} className="hover:bg-white/5 transition-colors">
-                          <td className="p-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (ret.order) {
-                                  setSelectedOrderReceipt(ret.order);
-                                } else {
-                                  fetchOrderAndOpenReceipt(ret.orderId);
-                                }
-                              }}
-                              className="font-mono font-bold text-cyan-400 hover:text-cyan-300 hover:underline inline-flex items-center gap-1.5 transition-colors"
-                              title="اضغط لعرض تفاصيل الفاتورة الأصلية"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                              <span>{ret.receiptNumber || ret.order?.receiptNumber || `#${ret.orderId?.slice(0, 8)}`}</span>
-                            </button>
-                          </td>
-                          <td className="p-3 text-cyan-300">{ret.cashierName || 'كاشير'}</td>
-                          <td className="p-3 text-gray-400 font-mono text-[11px]">{new Date(ret.createdAt).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</td>
-                          <td className="p-3 font-mono font-bold text-rose-400">EGP {ret.refundAmount.toFixed(2)}</td>
-                          <td className="p-3 text-amber-300 font-medium">{ret.reason}</td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] ${ret.restockItems ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-gray-400'}`}>
-                              {ret.restockItems ? 'نعم (تمت الإعادة)' : 'لا'}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (ret.order) {
-                                  setSelectedOrderReceipt(ret.order);
-                                } else {
-                                  fetchOrderAndOpenReceipt(ret.orderId);
-                                }
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold inline-flex items-center gap-1 transition-all shadow-sm"
-                              title="عرض تفاصيل الفاتورة والإيصال"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>عرض الفاتورة</span>
-                            </button>
+                      {loadingAnalytics ? (
+                        <tr>
+                          <td colSpan={7}>
+                            <NeonSpinner label="جاري تحميل سجل فواتير المرتجعات..." />
                           </td>
                         </tr>
-                      ))}
+                      ) : returnsLog.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-gray-500">
+                            لا توجد فواتير مرتجعات مسجلة
+                          </td>
+                        </tr>
+                      ) : (
+                        returnsLog.map((ret) => (
+                          <tr key={ret.id} className="hover:bg-white/5 transition-colors">
+                            <td className="p-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (ret.order) {
+                                    setSelectedOrderReceipt(ret.order);
+                                  } else {
+                                    fetchOrderAndOpenReceipt(ret.orderId);
+                                  }
+                                }}
+                                className="font-mono font-bold text-cyan-400 hover:text-cyan-300 hover:underline inline-flex items-center gap-1.5 transition-colors"
+                                title="اضغط لعرض تفاصيل الفاتورة الأصلية"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>{ret.receiptNumber || ret.order?.receiptNumber || `#${ret.orderId?.slice(0, 8)}`}</span>
+                              </button>
+                            </td>
+                            <td className="p-3 text-cyan-300">{ret.cashierName || 'كاشير'}</td>
+                            <td className="p-3 text-gray-400 font-mono text-[11px]">{new Date(ret.createdAt).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                            <td className="p-3 font-mono font-bold text-rose-400">EGP {ret.refundAmount.toFixed(2)}</td>
+                            <td className="p-3 text-amber-300 font-medium">{ret.reason}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] ${ret.restockItems ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-gray-400'}`}>
+                                {ret.restockItems ? 'نعم (تمت الإعادة)' : 'لا'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (ret.order) {
+                                    setSelectedOrderReceipt(ret.order);
+                                  } else {
+                                    fetchOrderAndOpenReceipt(ret.orderId);
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold inline-flex items-center gap-1 transition-all shadow-sm"
+                                title="عرض تفاصيل الفاتورة والإيصال"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>عرض الفاتورة</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2283,38 +2378,52 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {productCosts.map((item) => (
-                        <tr key={item.id} className="hover:bg-white/5">
-                          <td className="p-3 font-semibold text-white">{item.name}</td>
-                          <td className="p-3 text-gray-400">{item.categoryName}</td>
-                          <td className="p-3 font-mono text-cyan-400">EGP {item.price.toFixed(2)}</td>
-                          <td className="p-3 font-mono text-amber-400">EGP {item.unitCost.toFixed(2)}</td>
-                          <td className="p-3 font-mono text-emerald-400">EGP {item.profitPerUnit.toFixed(2)}</td>
-                          <td className="p-3 font-bold text-purple-300">{item.profitMarginPct}%</td>
-                          <td className="p-3 font-bold text-white">{item.qtySoldToday}</td>
-                          <td className="p-3 font-mono font-bold text-emerald-400">EGP {item.totalProfitToday.toFixed(2)}</td>
-                          <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => openEditItemModal(item)}
-                                className="px-2 py-1 rounded-lg text-cyan-400 hover:text-white hover:bg-cyan-500/20 border border-cyan-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
-                                title="تعديل الصنف والوصفة"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                                <span>تعديل</span>
-                              </button>
-                              <button
-                                onClick={() => handleDeleteMenuItem(item.id, item.name)}
-                                className="px-2 py-1 rounded-lg text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
-                                title="حذف الصنف"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>مسح</span>
-                              </button>
-                            </div>
+                      {loadingCosts ? (
+                        <tr>
+                          <td colSpan={9}>
+                            <NeonSpinner label="جاري تحميل قائمة الأصناف والتكاليف..." />
                           </td>
                         </tr>
-                      ))}
+                      ) : productCosts.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="p-8 text-center text-gray-500">
+                            لا توجد أصناف مسجلة حالياً
+                          </td>
+                        </tr>
+                      ) : (
+                        productCosts.map((item) => (
+                          <tr key={item.id} className="hover:bg-white/5">
+                            <td className="p-3 font-semibold text-white">{item.name}</td>
+                            <td className="p-3 text-gray-400">{item.categoryName}</td>
+                            <td className="p-3 font-mono text-cyan-400">EGP {item.price.toFixed(2)}</td>
+                            <td className="p-3 font-mono text-amber-400">EGP {item.unitCost.toFixed(2)}</td>
+                            <td className="p-3 font-mono text-emerald-400">EGP {item.profitPerUnit.toFixed(2)}</td>
+                            <td className="p-3 font-bold text-purple-300">{item.profitMarginPct}%</td>
+                            <td className="p-3 font-bold text-white">{item.qtySoldToday}</td>
+                            <td className="p-3 font-mono font-bold text-emerald-400">EGP {item.totalProfitToday.toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => openEditItemModal(item)}
+                                  className="px-2 py-1 rounded-lg text-cyan-400 hover:text-white hover:bg-cyan-500/20 border border-cyan-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
+                                  title="تعديل الصنف والوصفة"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  <span>تعديل</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteMenuItem(item.id, item.name)}
+                                  className="px-2 py-1 rounded-lg text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
+                                  title="حذف الصنف"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>مسح</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2364,39 +2473,53 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {rawMaterials.map((mat) => (
-                        <tr key={mat.id} className="hover:bg-white/5">
-                          <td className="p-3 font-semibold text-white">{mat.name}</td>
-                          <td className="p-3 font-mono font-bold text-cyan-400">{mat.stockQty} {mat.deductUnit}</td>
-                          <td className="p-3 text-gray-400">{mat.minStockLevel} {mat.deductUnit}</td>
-                          <td className="p-3 font-mono text-amber-300">EGP {mat.costPerPurchaseUnit?.toFixed(2) || '0.00'} / {mat.purchaseUnit}</td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] ${mat.stockQty < mat.minStockLevel ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
-                              {mat.stockQty < mat.minStockLevel ? 'ناقص' : 'آمن'}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => openEditMaterialModal(mat)}
-                                className="px-2 py-1 rounded-lg text-cyan-400 hover:text-white hover:bg-cyan-500/20 border border-cyan-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
-                                title="تعديل بيانات الخامة"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                                <span>تعديل</span>
-                              </button>
-                              <button
-                                onClick={() => handleDeleteRawMaterial(mat.id, mat.name)}
-                                className="px-2 py-1 rounded-lg text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
-                                title="حذف الخامة"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>مسح</span>
-                              </button>
-                            </div>
+                      {loadingInventory ? (
+                        <tr>
+                          <td colSpan={6}>
+                            <NeonSpinner label="جاري تحميل بيانات المخزون والأرصدة..." />
                           </td>
                         </tr>
-                      ))}
+                      ) : rawMaterials.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-gray-500">
+                            لا توجد خامات مسجلة في المخزن حالياً
+                          </td>
+                        </tr>
+                      ) : (
+                        rawMaterials.map((mat) => (
+                          <tr key={mat.id} className="hover:bg-white/5">
+                            <td className="p-3 font-semibold text-white">{mat.name}</td>
+                            <td className="p-3 font-mono font-bold text-cyan-400">{mat.stockQty} {mat.deductUnit}</td>
+                            <td className="p-3 text-gray-400">{mat.minStockLevel} {mat.deductUnit}</td>
+                            <td className="p-3 font-mono text-amber-300">EGP {mat.costPerPurchaseUnit?.toFixed(2) || '0.00'} / {mat.purchaseUnit}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] ${mat.stockQty < mat.minStockLevel ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                {mat.stockQty < mat.minStockLevel ? 'ناقص' : 'آمن'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => openEditMaterialModal(mat)}
+                                  className="px-2 py-1 rounded-lg text-cyan-400 hover:text-white hover:bg-cyan-500/20 border border-cyan-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
+                                  title="تعديل بيانات الخامة"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  <span>تعديل</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteRawMaterial(mat.id, mat.name)}
+                                  className="px-2 py-1 rounded-lg text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
+                                  title="حذف الخامة"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>مسح</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2659,8 +2782,8 @@ export default function AdminPage() {
                     <tbody className="divide-y divide-white/5">
                       {loadingExpenses ? (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center text-gray-400">
-                            جاري تحميل سجل المصروفات...
+                          <td colSpan={5}>
+                            <NeonSpinner label="جاري تحميل سجل المصروفات..." />
                           </td>
                         </tr>
                       ) : filteredExpenses.length === 0 ? (
@@ -4158,8 +4281,8 @@ export default function AdminPage() {
                 <tbody className="divide-y divide-white/5">
                   {loadingPeriodOrders ? (
                     <tr>
-                      <td colSpan={8} className="p-10 text-center text-gray-400">
-                        جاري تحميل فواتير الفترة...
+                      <td colSpan={8}>
+                        <NeonSpinner label="جاري تحميل فواتير الفترة..." />
                       </td>
                     </tr>
                   ) : filteredPeriodOrders.length === 0 ? (

@@ -23,8 +23,9 @@ import {
   Coffee, LogOut, Wifi, WifiOff, Users, ShoppingBag, 
   Trash2, Plus, Minus, DollarSign, RefreshCw, 
   CheckCircle2, AlertCircle, X, PlusCircle, Printer, Lock,
-  CreditCard, Smartphone, RotateCcw, UserPlus, Search, Wallet
+  CreditCard, Smartphone, RotateCcw, UserPlus, Search, Wallet, Database
 } from 'lucide-react';
+import { NeonSpinner, NeonBadge } from '@/components/NeonSpinner';
 
 const subscribeHydration = () => () => {};
 const getClientSnapshot = () => true;
@@ -100,6 +101,7 @@ export default function POSPage() {
   const { pendingCount, syncing, triggerSync } = useOfflineSync();
 
   // Local state for POS data loaded from Dexie
+  const [loadingPOS, setLoadingPOS] = useState(true);
   const [categories, setCategories] = useState<LocalCategory[]>([]);
   const [items, setItems] = useState<LocalItem[]>([]);
   const [modifiers, setModifiers] = useState<LocalModifier[]>([]);
@@ -259,6 +261,7 @@ export default function POSPage() {
 
   // Load POS initialization data
   const loadPOSData = useCallback(async () => {
+    setLoadingPOS(true);
     try {
       if (isOnline) {
         const res = await fetch('/api/pos-init').catch(() => null);
@@ -363,6 +366,8 @@ export default function POSPage() {
       }
     } catch (error) {
       console.error('Error loading POS data:', error);
+    } finally {
+      setLoadingPOS(false);
     }
   }, [isOnline, setActiveHallId]);
 
@@ -1115,6 +1120,11 @@ export default function POSPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 flex-row-reverse overflow-x-auto py-1">
+            {loadingPOS && (
+              <div className="shrink-0">
+                <NeonBadge label="جاري تحديث البيانات..." />
+              </div>
+            )}
             <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold shrink-0 ${
               isOnline ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
             }`}>
@@ -1274,39 +1284,57 @@ export default function POSPage() {
             {/* Menu Items Grid */}
             <div className="flex-1 glass-panel rounded-xl p-4 flex flex-col gap-4 overflow-hidden">
               <div className="flex gap-2 border-b border-white/5 pb-3 overflow-x-auto shrink-0 pl-1 justify-start">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategoryId(cat.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap transition-all ${
-                      selectedCategoryId === cat.id ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10'
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
+                {loadingPOS && categories.length === 0 ? (
+                  <div className="flex items-center gap-2 py-1 px-3 text-xs text-cyan-300/80 animate-pulse">
+                    <Database className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                    <span>جاري تحميل الأقسام...</span>
+                  </div>
+                ) : (
+                  categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategoryId(cat.id)}
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap transition-all ${
+                        selectedCategoryId === cat.id ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto pl-1">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {items
-                    .filter((i) => i.categoryId === selectedCategoryId)
-                    .map((item) => (
-                      <div key={item.id} className="flex flex-col gap-1">
-                      <button
-                        onClick={() => handleItemClick(item)}
-                        className="glass-panel-hover flex flex-col justify-between p-3.5 rounded-xl text-right bg-slate-900/40 border border-white/5 h-[95px] cursor-pointer hover:border-cyan-500/30"
-                      >
-                        <span className="font-semibold text-xs text-white line-clamp-2">{item.name}</span>
-                        <div className="flex items-center justify-between w-full mt-2 flex-row-reverse">
-                          <span className="text-cyan-400 font-bold text-xs">EGP {item.price.toFixed(2)}</span>
-                          <PlusCircle className="w-4 h-4 text-cyan-400/80" />
+                {loadingPOS && items.length === 0 ? (
+                  <div className="h-full flex items-center justify-center">
+                    <NeonSpinner label="جاري تحميل منيو BON el MOON..." subLabel="لحظات وتصبح قائمة المشروبات والمأكولات جاهزة" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                    {items
+                      .filter((i) => i.categoryId === selectedCategoryId)
+                      .map((item) => (
+                        <div key={item.id} className="flex flex-col gap-1">
+                        <button
+                          onClick={() => handleItemClick(item)}
+                          className="glass-panel-hover flex flex-col justify-between p-3.5 rounded-xl text-right bg-slate-900/40 border border-white/5 h-[95px] cursor-pointer hover:border-cyan-500/30"
+                        >
+                          <span className="font-semibold text-xs text-white line-clamp-2">{item.name}</span>
+                          <div className="flex items-center justify-between w-full mt-2 flex-row-reverse">
+                            <span className="text-cyan-400 font-bold text-xs">EGP {item.price.toFixed(2)}</span>
+                            <PlusCircle className="w-4 h-4 text-cyan-400/80" />
+                          </div>
+                        </button>
+                        <button type="button" onClick={(event) => handleOpenModifiers(event, item)} className="text-xs rounded-lg border border-white/10 p-1.5 text-cyan-300 hover:bg-white/10">إضافات وملاحظة</button>
                         </div>
-                      </button>
-                      <button type="button" onClick={(event) => handleOpenModifiers(event, item)} className="text-xs rounded-lg border border-white/10 p-1.5 text-cyan-300 hover:bg-white/10">إضافات وملاحظة</button>
+                      ))}
+                    {!loadingPOS && items.filter((i) => i.categoryId === selectedCategoryId).length === 0 && (
+                      <div className="col-span-full py-16 text-center text-gray-500 text-xs">
+                        لا توجد أصناف في هذا القسم حالياً
                       </div>
-                    ))}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </section>
