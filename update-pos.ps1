@@ -2,6 +2,18 @@
   [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'BonElMoonPOS')
 )
 $ErrorActionPreference = 'Stop'
+
+# Auto-elevate to Administrator if not already elevated
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+  $scriptPath = $MyInvocation.MyCommand.Path
+  if ($scriptPath) {
+    Write-Host "[!] جاري طلب صلاحيات المسؤول (Administrator)..." -ForegroundColor Yellow
+    $proc = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs -PassThru
+    exit $proc.ExitCode
+  }
+}
+
 $app = Join-Path $InstallRoot 'app'
 
 function Step($message) {
