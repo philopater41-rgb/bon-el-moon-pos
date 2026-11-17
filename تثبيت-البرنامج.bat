@@ -1,0 +1,27 @@
+@echo off
+chcp 65001 >nul
+title BON el MOON POS - تثبيت وإعداد البرنامج
+cd /d "%~dp0"
+
+echo ====================================================
+echo      BON el MOON POS - تثبيت وإعداد الكاشير
+echo ====================================================
+echo.
+echo [+] جاري فحص وتثبيت المتطلبات (Node.js, Git)...
+echo [+] جاري سحب أحدث نسخة وبناء البرنامج للعمل بدون نت...
+echo.
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-cafe-pos.ps1"
+if errorlevel 1 (
+    echo.
+    echo [!] حدث خطأ أثناء التثبيت.
+    pause
+    exit /b 1
+)
+
+echo.
+echo ====================================================
+echo   تم اكتمال التثبيت وتشغيل BON el MOON بنجاح!
+echo ====================================================
+echo.
+timeout /t 5

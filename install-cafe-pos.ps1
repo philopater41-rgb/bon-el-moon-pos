@@ -224,13 +224,16 @@ try {
   if (-not $SkipShortcuts) {
     $desktop = [Environment]::GetFolderPath('Desktop')
     $shell = New-Object -ComObject WScript.Shell
+    $icon = Join-Path $app 'bon-pos.ico'
+    if (-not (Test-Path -LiteralPath $icon) -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'bon-pos.ico'))) {
+      Copy-Item (Join-Path $PSScriptRoot 'bon-pos.ico') $icon -Force
+    }
 
-    # 1. Main POS launcher shortcut
+    # 1. Main POS launcher shortcut with official BON el MOON logo
     $shortcut = $shell.CreateShortcut((Join-Path $desktop 'BON el MOON POS.lnk'))
     $shortcut.TargetPath = Join-Path $app 'start-pos.bat'
     $shortcut.WorkingDirectory = $app
     $shortcut.Description = 'تشغيل نظام كاشير BON el MOON'
-    $icon = Join-Path $app 'bon-pos.ico'
     if (Test-Path -LiteralPath $icon) {
       $shortcut.IconLocation = "$icon,0"
     }
