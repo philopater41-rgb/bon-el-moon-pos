@@ -100,28 +100,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const newShift = await prisma.$transaction(async (tx) => {
-      await tx.savedCashierName.upsert({
-        where: { name: normalizedCashierName },
-        create: { name: normalizedCashierName },
-        update: {},
-      });
-      return tx.shift.create({
-        data: {
-          userId,
-          cashierName: normalizedCashierName,
-          floatCash: parseFloat(floatCash) || 0,
-          expectedCash: parseFloat(floatCash) || 0,
-          expectedInstaPay: 0,
+    const newShift = await prisma.shift.create({
+      data: {
+        userId,
+        cashierName: normalizedCashierName,
+        floatCash: parseFloat(floatCash) || 0,
+        expectedCash: parseFloat(floatCash) || 0,
+        expectedInstaPay: 0,
           expectedVisa: 0,
         },
-      include: {
-        user: {
-          select: { id: true, name: true, username: true, role: true },
+        include: {
+          user: {
+            select: { id: true, name: true, username: true, role: true },
+          },
         },
-      },
       });
-    });
 
     return NextResponse.json({ shift: newShift });
   } catch (error) {
