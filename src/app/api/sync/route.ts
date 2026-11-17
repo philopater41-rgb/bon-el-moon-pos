@@ -83,9 +83,35 @@ export async function POST(request: Request) {
           }
 
           // 2a. Validate and sanitize foreign keys to prevent P2003 constraints
-          const finalShiftId = order.shiftId;
+          let finalShiftId = order.shiftId;
           const shiftExists = await tx.shift.findUnique({ where: { id: finalShiftId } });
-          if (!shiftExists) throw new Error('الوردية غير موجودة؛ لم تتم مزامنة الطلب');
+          if (!shiftExists) {
+            // Find existing open shift in DB
+            const activeDbShift = await tx.shift.findFirst({
+              where: { closedAt: null },
+              orderBy: { openedAt: 'desc' },
+            });
+            if (activeDbShift) {
+              finalShiftId = activeDbShift.id;
+            } else {
+              // Create offline shift automatically in database so orders are never lost
+              const defaultUser = await tx.user.findFirst();
+              if (defaultUser) {
+                const newShift = await tx.shift.create({
+                  data: {
+                    id: finalShiftId,
+                    userId: defaultUser.id,
+                    cashierName: order.customerName ? undefined : 'كاشير (أوفلاين)',
+                    openedAt: new Date(order.createdAt),
+                    floatCash: 0,
+                  },
+                });
+                finalShiftId = newShift.id;
+              } else {
+                throw new Error('الوردية غير موجودة؛ لم تتم مزامنة الطلب');
+              }
+            }
+          }
 
           const finalTableId = order.tableId || null;
           if (finalTableId) {

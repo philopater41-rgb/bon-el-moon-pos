@@ -886,8 +886,29 @@ export default function POSPage() {
       setShowOpenShift(false);
       triggerAlert('success', `تم فتح الوردية بنجاح! أهلاً بك يا ${finalCashierName}`);
     } catch (caught: unknown) {
-      const err = caught instanceof Error ? caught : new Error(String(caught));
-      triggerAlert('error', err.message || 'خطأ في فتح الوردية');
+      console.warn('Failed to open shift online, falling back to offline shift:', caught);
+      // Offline fallback: create local shift so cashier is never blocked from selling
+      const offlineShift = {
+        id: `offline-shift-${Date.now()}`,
+        userId: user?.id || 'cashier',
+        cashierName: finalCashierName,
+        floatCash: parseFloat(floatCash) || 0,
+        expectedCash: parseFloat(floatCash) || 0,
+        expectedInstaPay: 0,
+        expectedVisa: 0,
+        expectedVodafoneCash: 0,
+        expectedCashOut: 0,
+        openedAt: new Date().toISOString(),
+      };
+      setActiveShift(offlineShift);
+      setSavedCashierNames((prev) => {
+        if (!prev.some((c) => c.name === finalCashierName)) {
+          return [...prev, { id: finalCashierName, name: finalCashierName }];
+        }
+        return prev;
+      });
+      setShowOpenShift(false);
+      triggerAlert('success', `تم فتح الوردية محلياً (وضع عدم الاتصال). أهلاً بك يا ${finalCashierName}`);
     }
   };
 
