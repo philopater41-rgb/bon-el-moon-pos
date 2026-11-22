@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { createBarcodeScanner } from '@/lib/barcode-scanner';
 import {
   offlineDB,
   type LocalCategory,
@@ -546,20 +547,25 @@ export default function POSPage() {
     };
   });
   useEffect(() => {
-    let buffer = ''; let lastKey = 0;
+    const scanner = createBarcodeScanner(code => scannerHandler.current(code));
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName || '') || event.ctrlKey || event.altKey || event.metaKey) { buffer = ''; return; }
-      const now = Date.now();
-      if (now - lastKey > 100) buffer = '';
-      lastKey = now;
-      if (event.key === 'Enter') {
-        if (buffer.length >= 3) { event.preventDefault(); scannerHandler.current(buffer); }
-        buffer = '';
-      } else if (event.key.length === 1 && buffer.length < 100) buffer += event.key;
+      if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName || '') || event.ctrlKey || event.altKey || event.metaKey) {
+        scanner.cancel();
+        return;
+      }
+      if (scanner.feed(event.key) && event.key === 'Enter') event.preventDefault();
     };
+    const cancel = () => scanner.cancel();
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('focusin', cancel);
+    window.addEventListener('blur', cancel);
+    return () => {
+      scanner.cancel();
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('focusin', cancel);
+      window.removeEventListener('blur', cancel);
+    };
   }, []);
 
   // Open modifiers modal for customization
