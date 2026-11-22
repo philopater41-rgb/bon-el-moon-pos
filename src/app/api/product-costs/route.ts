@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getBarcodes } from '@/lib/barcodes';
 
 export async function GET() {
   try {
@@ -16,6 +17,7 @@ export async function GET() {
       orderBy: { name: 'asc' },
     });
 
+    const barcodeMap = await getBarcodes();
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -68,6 +70,7 @@ export async function GET() {
       return {
         id: item.id,
         name: item.name,
+        barcode: barcodeMap?.get(item.id) || null,
         categoryId: item.categoryId,
         categoryName: item.category?.name || 'عام',
         price: item.price,
@@ -86,6 +89,7 @@ export async function GET() {
 
     return NextResponse.json({
       items: calculatedItems,
+      barcodeAvailable: barcodeMap !== null,
       totalTodayProfit: Number(
         calculatedItems.reduce((sum, it) => sum + it.totalProfitToday, 0).toFixed(2)
       ),

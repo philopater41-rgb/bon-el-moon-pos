@@ -181,15 +181,15 @@ try {
     [IO.File]::WriteAllText($newEnv, $content, (New-Object Text.UTF8Encoding($false)))
     Write-Host "[+] تم إنشاء .env بناءً على المعاملات الممررة." -ForegroundColor Green
   }
-  # 4. Default official BON el MOON Neon cloud database credentials (obfuscated from scanner)
+  # A fresh installation must receive its own database connection securely.
   else {
-    $b64Direct = 'cG9zdGdyZXNxbDovL25lb25kYl9vd25lcjpucGdfOHBXcnRCdzFZS0xVQGVwLWNhbG0tbW91c2UtYmQ4dmRjbHguYy04LnVzLWVhc3QtMi5hd3MubmVvbi50ZWNoL25lb25kYj9zc2xtb2RlPXJlcXVpcmUmY2hhbm5lbF9iaW5kaW5nPXJlcXVpcmU='
-    $b64Pooled = 'cG9zdGdyZXNxbDovL25lb25kYl9vd25lcjpucGdfOHBXcnRCdzFZS0xVQGVwLWNhbG0tbW91c2UtYmQ4dmRjbHgtcG9vbGVyLmMtOC51cy1lYXN0LTIuYXdzLm5lb24udGVjaC9uZW9uZGI/c3NsbW9kZT1yZXF1aXJlJmNoYW5uZWxfYmluZGluZz1yZXF1aXJl'
-    $defaultDirect = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64Direct))
-    $defaultPooled = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64Pooled))
-    $content = "DATABASE_URL=`"$defaultDirect`"`r`nDATABASE_URL_POOLED=`"$defaultPooled`"`r`n"
+    Write-Host 'Enter the direct PostgreSQL connection string for this installation.' -ForegroundColor Yellow
+    $enteredDirect = Read-Host 'DATABASE_URL'
+    if ([string]::IsNullOrWhiteSpace($enteredDirect)) { throw 'DATABASE_URL is required; existing data was not changed.' }
+    $enteredPooled = Read-Host 'DATABASE_URL_POOLED (leave blank to use the direct URL)'
+    if ([string]::IsNullOrWhiteSpace($enteredPooled)) { $enteredPooled = $enteredDirect }
+    $content = "DATABASE_URL=`"$enteredDirect`"`r`nDATABASE_URL_POOLED=`"$enteredPooled`"`r`n"
     [IO.File]::WriteAllText($newEnv, $content, (New-Object Text.UTF8Encoding($false)))
-    Write-Host "[+] تم تطبيق إعدادات قاعدة بيانات BON el MOON السحابية تلقائياً." -ForegroundColor Green
   }
 
   # Also preserve backups directory if updating

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
@@ -37,7 +37,7 @@ const scheduleEffect = (work: () => void) => {
 };
 
 interface POSInitialization {
-  categories: Array<LocalCategory & { items: Array<Pick<LocalItem, 'id' | 'name' | 'price'>> }>;
+  categories: Array<LocalCategory & { items: Array<Pick<LocalItem, 'id' | 'name' | 'price' | 'barcode'>> }>;
   modifiers: LocalModifier[];
   halls: Array<LocalHall & { tables: Array<Pick<LocalTable, 'id' | 'name' | 'status'>> }>;
   customers?: LocalCustomer[];
@@ -104,6 +104,8 @@ export default function POSPage() {
   const [loadingPOS, setLoadingPOS] = useState(true);
   const [categories, setCategories] = useState<LocalCategory[]>([]);
   const [items, setItems] = useState<LocalItem[]>([]);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const scannerHandler = useRef<(code: string) => void>(() => {});
   const [modifiers, setModifiers] = useState<LocalModifier[]>([]);
   const [halls, setHalls] = useState<LocalHall[]>([]);
   const [tables, setTables] = useState<LocalTable[]>([]);
@@ -299,7 +301,7 @@ export default function POSPage() {
           const allItems: LocalItem[] = [];
           data.categories.forEach((c) => {
             c.items.forEach((i) => {
-              allItems.push({ id: i.id, name: i.name, price: i.price, categoryId: c.id });
+              allItems.push({ id: i.id, name: i.name, price: i.price, barcode: i.barcode, categoryId: c.id });
             });
           });
           await offlineDB.items.bulkPut(allItems);
@@ -454,37 +456,6 @@ export default function POSPage() {
     if ((useAppStore.getState().activeTableId || 'takeaway') === updatedCart.id) setCart(updatedCart);
   };
 
-  // Add Item to Cart
-  const handleItemClick = (item: LocalItem) => {
-    if (!ensureActiveShift()) return;
-    if (!cart || cart.id !== (useAppStore.getState().activeTableId || 'takeaway')) { triggerAlert('error', 'جاري تحميل السلة، حاول مرة أخرى'); return; }
-    if (item.name === 'حجز عيد ميلاد') {
-      const enteredPrice = window.prompt('اكتب قيمة حجز عيد الميلاد', '');
-      if (enteredPrice === null) return;
-      const price = Number(enteredPrice);
-      if (!Number.isFinite(price) || price <= 0) {
-        triggerAlert('error', 'اكتب قيمة حجز صحيحة أكبر من صفر.');
-        return;
-      }
-      void addItemToCartDirectly(item, [], price);
-      return;
-    }
-
-    // Add item directly to cart instantly
-    void addItemToCartDirectly(item, []);
-  };
-
-  // Open modifiers modal for customization
-  const handleOpenModifiers = (e: React.MouseEvent, item: LocalItem) => {
-    e.stopPropagation();
-    if (!ensureActiveShift()) return;
-    if (!cart || cart.id !== (useAppStore.getState().activeTableId || 'takeaway')) { triggerAlert('error', 'جاري تحميل السلة، حاول مرة أخرى'); return; }
-    setActiveItemForMod(item);
-    setSelectedMods([]);
-    setItemComment('');
-    setShowModifiersModal(true);
-  };
-
   const addItemToCartDirectly = async (
     item: LocalItem,
     selectedModList: LocalModifier[],
@@ -538,6 +509,68 @@ export default function POSPage() {
       await offlineDB.diningTables.update(cart.tableId, { status: 'OCCUPIED' });
       setTables((prev) => prev.map((t) => (t.id === cart.tableId ? { ...t, status: 'OCCUPIED' } : t)));
     }
+  };
+
+
+  // Add Item to Cart
+  const handleItemClick = (item: LocalItem) => {
+    if (!ensureActiveShift()) return;
+    if (!cart || cart.id !== (useAppStore.getState().activeTableId || 'takeaway')) { triggerAlert('error', 'جاري تحميل السلة، حاول مرة أخرى'); return; }
+    if (item.name === 'حجز عيد ميلاد') {
+      const enteredPrice = window.prompt('اكتب قيمة حجز عيد الميلاد', '');
+      if (enteredPrice === null) return;
+      const price = Number(enteredPrice);
+      if (!Number.isFinite(price) || price <= 0) {
+        triggerAlert('error', 'اكتب قيمة حجز صحيحة أكبر من صفر.');
+        return;
+      }
+      void addItemToCartDirectly(item, [], price);
+      return;
+    }
+
+    // Add item directly to cart instantly
+    void addItemToCartDirectly(item, []);
+  };
+
+  const handleBarcode = (value: string) => {
+    const code = value.trim();
+    if (!code) return;
+    const item = items.find(i => i.barcode === code);
+    if (!item) { triggerAlert('error', `الباركود ${code} غير مسجل لأي صنف`); return; }
+    handleItemClick(item);
+  };
+  useEffect(() => {
+    scannerHandler.current = code => {
+      if (showOpenShift || showCloseShift || showExpenseModal || showModifiersModal || showReturnModal || showPrintModal || showPaymentConfirm || showAddCustomerModal) return;
+      handleBarcode(code);
+    };
+  });
+  useEffect(() => {
+    let buffer = ''; let lastKey = 0;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName || '') || event.ctrlKey || event.altKey || event.metaKey) { buffer = ''; return; }
+      const now = Date.now();
+      if (now - lastKey > 100) buffer = '';
+      lastKey = now;
+      if (event.key === 'Enter') {
+        if (buffer.length >= 3) { event.preventDefault(); scannerHandler.current(buffer); }
+        buffer = '';
+      } else if (event.key.length === 1 && buffer.length < 100) buffer += event.key;
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Open modifiers modal for customization
+  const handleOpenModifiers = (e: React.MouseEvent, item: LocalItem) => {
+    e.stopPropagation();
+    if (!ensureActiveShift()) return;
+    if (!cart || cart.id !== (useAppStore.getState().activeTableId || 'takeaway')) { triggerAlert('error', 'جاري تحميل السلة، حاول مرة أخرى'); return; }
+    setActiveItemForMod(item);
+    setSelectedMods([]);
+    setItemComment('');
+    setShowModifiersModal(true);
   };
 
   const confirmModifiers = () => {
@@ -1140,7 +1173,7 @@ export default function POSPage() {
 
   if (!mounted) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-[#090d16] text-gray-200 text-right" dir="rtl">
+      <div className="flex flex-col items-center justify-center h-screen bg-[#0c0907] text-gray-200 text-right" dir="rtl">
         <RefreshCw className="w-8 h-8 animate-spin text-cyan-500" />
       </div>
     );
@@ -1148,12 +1181,12 @@ export default function POSPage() {
 
   return (
     <>
-      <div className="flex flex-col h-screen bg-[#090d16] text-gray-200 text-right no-print" dir="rtl">
+      <div className="flex flex-col h-screen bg-[#0c0907] text-gray-200 text-right no-print" dir="rtl">
         {/* 1. Header Navigation Bar */}
-        <header className="h-16 shrink-0 bg-[#0c1424] border-b border-white/5 px-4 sm:px-6 flex items-center justify-between z-10 no-print">
+        <header className="h-16 shrink-0 bg-[#1c140f] border-b border-white/5 px-4 sm:px-6 flex items-center justify-between z-10 no-print">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl overflow-hidden relative border border-white/10 shrink-0 bg-white shadow-md">
-              <Image width={128} height={128} unoptimized loading="eager" src="/bon-logo.jpg" alt="BON el MOON" className="w-full h-full object-cover" />
+            <div className="w-24 h-12 rounded-xl overflow-hidden relative border border-amber-500/20 shrink-0 bg-[#1c140f] shadow-md">
+              <Image width={128} height={128} unoptimized loading="eager" src="/brand-color.jpeg" alt="بن المون" className="w-full h-full object-contain" />
             </div>
             <div className="hidden sm:block text-right">
               <h1 className="text-base font-bold text-white leading-tight">BON el MOON - نقطة البيع</h1>
@@ -1259,7 +1292,7 @@ export default function POSPage() {
           </div>
         </header>
 
-        <nav aria-label="التنقل في نقطة البيع" className="lg:hidden flex shrink-0 gap-2 p-2 bg-[#0c1424] border-b border-white/10">
+        <nav aria-label="التنقل في نقطة البيع" className="lg:hidden flex shrink-0 gap-2 p-2 bg-[#1c140f] border-b border-white/10">
           <button type="button" onClick={() => setMobileTab('menu')} aria-pressed={mobileTab === 'menu'} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mobileTab === 'menu' ? 'bg-cyan-600 text-white' : 'bg-white/5 text-gray-300'}`}>المنيو والطاولات</button>
           <button type="button" onClick={() => setMobileTab('cart')} aria-pressed={mobileTab === 'cart'} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mobileTab === 'cart' ? 'bg-cyan-600 text-white' : 'bg-white/5 text-gray-300'}`}>السلة ({cart?.items.reduce((sum, item) => sum + item.qty, 0) || 0})</button>
         </nav>
@@ -1271,7 +1304,12 @@ export default function POSPage() {
             {/* Floor Plan */}
             <div className="glass-panel rounded-xl p-4 shrink-0 flex flex-col gap-3">
               <div className="flex items-center justify-between border-b border-white/5 pb-2 flex-row-reverse">
-                <div className="flex items-center gap-2">
+                <form onSubmit={e => { e.preventDefault(); handleBarcode(barcodeInput); setBarcodeInput(''); }} className="flex gap-2 mb-3" role="search">
+                <input aria-label="باركود المنتج" value={barcodeInput} onChange={e => setBarcodeInput(e.target.value)} placeholder="امسح الباركود أو اكتبه هنا" autoComplete="off" dir="ltr" className="min-w-0 flex-1 rounded-xl border border-amber-500/40 bg-slate-950 px-3 py-2 text-sm text-white" />
+                <button type="submit" className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white">إضافة بالباركود</button>
+                <button type="button" onClick={() => void loadPOSData()} disabled={loadingPOS} className="rounded-xl border border-amber-500/40 px-3 py-2 text-xs text-amber-300 disabled:opacity-40">تحديث المنيو</button>
+              </form>
+              <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-cyan-400" />
                   <h2 className="font-semibold text-sm text-white">صالات وترابيزات الصالة</h2>
                 </div>
@@ -1381,7 +1419,7 @@ export default function POSPage() {
           </section>
 
           {/* Right Side: Active Cart & Multi-Payment Checkout Panel */}
-          <section className={`w-full lg:w-[400px] xl:w-[440px] bg-[#0c1424] lg:border-r border-white/5 flex flex-col overflow-hidden shrink-0 ${mobileTab === 'cart' ? 'flex' : 'hidden lg:flex'}`}>
+          <section className={`w-full lg:w-[400px] xl:w-[440px] bg-[#1c140f] lg:border-r border-white/5 flex flex-col overflow-hidden shrink-0 ${mobileTab === 'cart' ? 'flex' : 'hidden lg:flex'}`}>
             <div className="p-3.5 border-b border-white/5 flex items-center justify-between shrink-0 flex-row-reverse">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-purple-400" />
@@ -1496,7 +1534,7 @@ export default function POSPage() {
             </div>
 
             {/* Pricing, Discounts & Payment Selection Section */}
-            <div className="p-3.5 border-t border-white/5 bg-[#090d16] shrink-0 space-y-3">
+            <div className="p-3.5 border-t border-white/5 bg-[#0c0907] shrink-0 space-y-3">
               {/* Discount selection */}
               {selectedCustomerId ? (
                 <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center justify-between text-xs flex-row-reverse">

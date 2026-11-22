@@ -41,6 +41,13 @@ model Item {
   recipe      Recipe[]
   orderItems  SalesOrderItem[]
   returnItems OrderReturnItem[]
+  barcodeRecord ItemBarcode?
+}
+
+model ItemBarcode {
+  itemId  String @id
+  barcode String @unique
+  item    Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
 }
 
 model Modifier {

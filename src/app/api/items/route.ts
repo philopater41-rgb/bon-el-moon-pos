@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getBarcodes } from '@/lib/barcodes';
 
 // GET: Fetch all active items with recipes and categories
 export async function GET() {
@@ -32,7 +33,7 @@ export async function GET() {
 // POST: Create a new menu item with optional recipe ingredients
 export async function POST(request: Request) {
   try {
-    const { name, price, cost, categoryName, recipe } = await request.json();
+    const { name, price, cost, categoryName, recipe, barcode } = await request.json();
     const itemName = typeof name === 'string' ? name.trim() : '';
     const normalizedCategoryName = typeof categoryName === 'string' ? categoryName.trim() : '';
     const parsedPrice = Number(price);
@@ -42,6 +43,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'اسم الصنف والقسم والسعر الصحيح مطلوبون.' }, { status: 400 });
     }
 
+    const normalizedBarcode = typeof barcode === 'string' ? barcode.trim() : '';
+    if (normalizedBarcode && !(await getBarcodes())) return NextResponse.json({ error: 'يلزم تجهيز قاعدة البيانات لدعم الباركود أولاً.' }, { status: 503 });
     const itemWithRecipe = await prisma.$transaction(async (tx) => {
       const category = await tx.category.upsert({
         where: { name: normalizedCategoryName },
@@ -64,6 +67,8 @@ export async function POST(request: Request) {
         },
         include: { category: true, recipe: true },
       });
+
+      if (normalizedBarcode) await tx.itemBarcode.create({ data: { itemId: item.id, barcode: normalizedBarcode } });
 
       // If recipe ingredients were passed, create them
       if (recipe && Array.isArray(recipe) && recipe.length > 0) {
@@ -96,6 +101,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ item: itemWithRecipe }, { status: 201 });
   } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') return NextResponse.json({ error: 'الباركود مستخدم لصنف آخر بالفعل.' }, { status: 409 });
     console.error('Create menu item error:', error);
     return NextResponse.json({ error: 'تعذر إضافة الصنف.' }, { status: 500 });
   }
@@ -104,7 +110,7 @@ export async function POST(request: Request) {
 // PUT: Update an existing menu item and its recipe
 export async function PUT(request: Request) {
   try {
-    const { id, name, price, cost, categoryName, recipe } = await request.json();
+    const { id, name, price, cost, categoryName, recipe, barcode } = await request.json();
     if (!id) {
       return NextResponse.json({ error: 'معرّف الصنف مطلوب.' }, { status: 400 });
     }
@@ -118,6 +124,9 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'بيانات الصنف غير صحيحة.' }, { status: 400 });
     }
 
+    const barcodeMap = barcode !== undefined ? await getBarcodes() : null;
+    const normalizedBarcode = typeof barcode === 'string' ? barcode.trim() : '';
+    if (normalizedBarcode && !barcodeMap) return NextResponse.json({ error: 'يلزم تجهيز قاعدة البيانات لدعم الباركود أولاً.' }, { status: 503 });
     const updatedItem = await prisma.$transaction(async (tx) => {
       let categoryId: string | undefined;
       if (normalizedCategoryName) {
@@ -137,6 +146,10 @@ export async function PUT(request: Request) {
           ...(categoryId ? { categoryId } : {}),
         },
       });
+      if (barcode !== undefined && barcodeMap) {
+        if (normalizedBarcode) await tx.itemBarcode.upsert({ where: { itemId: id }, create: { itemId: id, barcode: normalizedBarcode }, update: { barcode: normalizedBarcode } });
+        else await tx.itemBarcode.deleteMany({ where: { itemId: id } });
+      }
       if (Array.isArray(recipe)) {
         await tx.recipe.deleteMany({ where: { itemId: id } });
         const validIngredients = recipe.filter(
@@ -152,6 +165,7 @@ export async function PUT(request: Request) {
     });
     return NextResponse.json({ item: updatedItem });
   } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') return NextResponse.json({ error: 'الباركود مستخدم لصنف آخر بالفعل.' }, { status: 409 });
     console.error('Update menu item error:', error);
     return NextResponse.json({ error: 'تعذر تعديل الصنف.' }, { status: 500 });
   }

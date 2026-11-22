@@ -76,18 +76,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#090d16] px-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-[#0c0907] px-4 relative overflow-hidden">
       {/* Background glow effects */}
       <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1.5s' }}></div>
 
       <div className="w-full max-w-md glass-panel rounded-2xl p-8 z-10 relative">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-24 h-24 rounded-2xl bg-white flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-4 overflow-hidden relative border border-white/20">
+          <div className="w-full max-w-xs h-36 rounded-2xl bg-[#1c140f] flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-4 overflow-hidden relative border border-white/20">
             <Image width={128} height={128} unoptimized loading="eager" 
-              src="/bon-logo.jpg" 
+              src="/brand-color.jpeg"
               alt="BON el MOON Logo" 
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
             />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-400">
@@ -144,7 +144,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-xl hover:from-cyan-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-[#090d16] disabled:opacity-50 transition-all shadow-lg shadow-cyan-500/10 active:scale-98 text-sm"
+            className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-xl hover:from-cyan-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-[#0c0907] disabled:opacity-50 transition-all shadow-lg shadow-cyan-500/10 active:scale-98 text-sm"
           >
             {loading ? 'جاري التحقق...' : 'تسجيل الدخول'}
           </button>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getBarcodes } from '@/lib/barcodes';
 
 export async function GET() {
   try {
@@ -17,6 +18,8 @@ export async function GET() {
       },
       orderBy: { name: 'asc' },
     });
+
+    const barcodeMap = await getBarcodes();
 
     // 2. Fetch modifiers
     const modifiers = await prisma.modifier.findMany({
@@ -63,7 +66,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      categories,
+      categories: categories.map(category => ({ ...category, items: category.items.map(item => ({ ...item, barcode: barcodeMap?.get(item.id) || null })) })),
       modifiers,
       halls,
       customers,

@@ -33,7 +33,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
-      <body className="min-h-full flex flex-col bg-[#090d16] text-[#f3f4f6]" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col bg-[#0c0907] text-[#f3f4f6]" suppressHydrationWarning>
         <OfflineShellRegistration />
         {children}
       </body>

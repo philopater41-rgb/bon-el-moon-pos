@@ -89,6 +89,7 @@ interface PaymentBreakdown {
 
 interface ProductCostItem {
   id: string;
+  barcode?: string | null;
   name: string;
   categoryId?: string;
   categoryName: string;
@@ -197,10 +198,15 @@ export default function AdminPage() {
 
   // 5. Product Costs & Profitability State
   const [productCosts, setProductCosts] = useState<ProductCostItem[]>([]);
+  const [barcodeAvailable, setBarcodeAvailable] = useState<boolean | null>(null);
   const [totalTodayProfit, setTotalTodayProfit] = useState(0);
   // Add Menu Item State
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
+  const [newItemBarcode, setNewItemBarcode] = useState('');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<{ rows: Array<{ row: number; name: string; categoryName: string; price: number; cost: number; barcode: string | null }>; errors: string[] } | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
   const [newItemCategory, setNewItemCategory] = useState('');
   const [newItemCost, setNewItemCost] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
@@ -214,6 +220,7 @@ export default function AdminPage() {
   const [selectedItemToEdit, setSelectedItemToEdit] = useState<ProductCostItem | null>(null);
   const [editItemId, setEditItemId] = useState('');
   const [editItemName, setEditItemName] = useState('');
+  const [editItemBarcode, setEditItemBarcode] = useState('');
   const [editItemCategory, setEditItemCategory] = useState('');
   const [editItemCost, setEditItemCost] = useState('');
   const [editItemPrice, setEditItemPrice] = useState('');
@@ -414,6 +421,7 @@ export default function AdminPage() {
       if (res.ok) {
         const data = await res.json();
         setProductCosts(data.items || []);
+        setBarcodeAvailable(data.barcodeAvailable !== false);
         setTotalTodayProfit(data.totalTodayProfit || 0);
       }
     } catch (e) {
@@ -901,6 +909,20 @@ export default function AdminPage() {
     }
   };
 
+  const handleImportItems = async (commit: boolean) => {
+    if (!importFile) return;
+    setImportBusy(true);
+    try {
+      const form = new FormData(); form.append('file', importFile); form.append('commit', String(commit));
+      const response = await fetch('/api/items/import', { method: 'POST', body: form });
+      const data = await response.json();
+      if (!response.ok && !data.errors) throw new Error(data.error || 'تعذر استيراد الملف');
+      setImportPreview({ rows: data.rows || [], errors: data.errors || [] });
+      if (commit && response.ok) { triggerAlert('success', `تم استيراد ${data.imported} صنف بنجاح`); setImportFile(null); setImportPreview(null); fetchProductCosts(); }
+    } catch (error) { triggerAlert('error', error instanceof Error ? error.message : 'تعذر استيراد الملف'); }
+    finally { setImportBusy(false); }
+  };
+
   // Menu Items: Create Handler
   const handleCreateMenuItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -921,6 +943,7 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newItemName.trim(),
+          barcode: newItemBarcode.trim(),
           price: parseFloat(newItemPrice) || 0,
           cost: parseFloat(newItemCost) || 0,
           categoryName: newItemCategory.trim(),
@@ -932,6 +955,7 @@ export default function AdminPage() {
       triggerAlert('success', `تمت إضافة صنف "${newItemName.trim()}" إلى المنيو بنجاح!`);
       setShowAddItemModal(false);
       setNewItemName('');
+      setNewItemBarcode('');
       setNewItemCategory('');
       setNewItemCost('');
       setNewItemPrice('');
@@ -950,6 +974,7 @@ export default function AdminPage() {
     setSelectedItemToEdit(item);
     setEditItemId(item.id);
     setEditItemName(item.name);
+    setEditItemBarcode(item.barcode || '');
     setEditItemCategory(item.categoryName);
     setEditItemPrice(item.price.toString());
     const effectiveCost = item.cost || item.unitCost || 0;
@@ -993,6 +1018,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           id: editItemId,
           name: editItemName.trim(),
+          barcode: editItemBarcode.trim(),
           price: parseFloat(editItemPrice) || 0,
           cost: parseFloat(editItemCost) || 0,
           categoryName: editItemCategory.trim(),
@@ -1202,14 +1228,14 @@ export default function AdminPage() {
   if (!mounted) return null;
 
   return (
-    <div className="flex h-screen bg-[#070b14] text-gray-200 text-right overflow-hidden" dir="rtl">
+    <div className="flex h-screen bg-[#0c0907] text-gray-200 text-right overflow-hidden" dir="rtl">
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-[#0a101d] border-l border-white/5 flex flex-col justify-between shrink-0 p-4">
+      <aside className="w-64 bg-[#1c140f] border-l border-white/5 flex flex-col justify-between shrink-0 p-4">
         <div className="space-y-6">
           {/* Logo Brand */}
           <div className="flex items-center gap-3 px-2">
-            <div className="w-10 h-10 rounded-xl overflow-hidden relative border border-white/10 shrink-0 bg-white shadow-md">
-              <Image width={128} height={128} unoptimized loading="eager" src="/bon-logo.jpg" alt="BON el MOON" className="w-full h-full object-cover" />
+            <div className="w-24 h-12 rounded-xl overflow-hidden relative border border-amber-500/20 shrink-0 bg-[#1c140f] shadow-md">
+              <Image width={128} height={128} unoptimized loading="eager" src="/brand-color.jpeg" alt="بن المون" className="w-full h-full object-contain" />
             </div>
             <div>
               <h1 className="font-bold text-sm text-white">BON el MOON</h1>
@@ -1273,7 +1299,7 @@ export default function AdminPage() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header Bar */}
-        <header className="h-16 border-b border-white/5 bg-[#0a101d] px-6 flex items-center justify-between shrink-0">
+        <header className="h-16 border-b border-white/5 bg-[#1c140f] px-6 flex items-center justify-between shrink-0">
           <div>
             <span className="text-xs text-gray-400">{todayLabel}</span>
             <h2 className="text-base font-bold text-white">
@@ -2362,6 +2388,19 @@ export default function AdminPage() {
                   </div>
                 </div>
 
+                <div className="rounded-xl border border-amber-500/30 bg-slate-900/60 p-4 space-y-3">
+                  <h4 className="font-bold text-sm text-amber-300">استيراد أصناف من Excel</h4>
+                  {barcodeAvailable === false && <p className="rounded-lg border border-amber-500/40 p-2 text-xs text-amber-200">تسجيل الباركود يتطلب تجهيز قاعدة البيانات أولاً. تقدر تستورد أصناف بدون باركود لحين التجهيز.</p>}
+                  <a href="/api/items/import" className="inline-block text-xs text-amber-300 underline">تحميل نموذج Excel فارغ</a>
+                  <p className="text-xs text-gray-300">ملف xlsx: الصف الأول يحتوي اسم المنتج، القسم، سعر البيع، ويمكن إضافة التكلفة والباركود. احفظ الباركود كنص للحفاظ على الأصفار في بدايته. الاستيراد يضيف أصنافًا جديدة فقط.</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input type="file" accept=".xlsx" aria-label="اختيار ملف Excel" className="text-xs text-gray-200" onChange={e => { setImportFile(e.target.files?.[0] || null); setImportPreview(null); }} />
+                    <button type="button" disabled={!importFile || importBusy} onClick={() => void handleImportItems(false)} className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">معاينة الملف</button>
+                    {importPreview && <button type="button" disabled={importBusy || importPreview.errors.length > 0 || !importPreview.rows.length} onClick={() => void handleImportItems(true)} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">تأكيد استيراد {importPreview.rows.length} صنف</button>}
+                  </div>
+                  {importPreview && <div className="max-h-56 overflow-auto text-xs space-y-2"><p>عدد الأصناف: {importPreview.rows.length} — الأخطاء: {importPreview.errors.length}</p>{importPreview.errors.map((error, index) => <p className="text-red-300" key={index}>{error}</p>)}{importPreview.rows.slice(0, 50).map(row => <p key={row.row}>{row.row}. {row.categoryName} — {row.name} — {row.price} ج — تكلفة {row.cost} {row.barcode ? `— باركود ${row.barcode}` : ''}</p>)}{importPreview.rows.length > 50 && <p>يتم عرض أول 50 صفًا فقط.</p>}</div>}
+                </div>
+
                 <div className="overflow-x-auto rounded-xl border border-white/5">
                   <table className="w-full text-right text-xs">
                     <thead className="bg-slate-900/80 text-gray-400 border-b border-white/5">
@@ -3358,6 +3397,8 @@ export default function AdminPage() {
                   </div>
                 </div>
 
+                <div><label className="block text-xs text-gray-300 mb-1">باركود المنتج (اختياري)</label><input type="text" inputMode="text" autoComplete="off" value={newItemBarcode} onChange={e => setNewItemBarcode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} placeholder="اكتب الباركود أو امسحه بالسكانر" className="w-full bg-slate-900 border border-amber-500/30 rounded-xl p-2.5 text-sm text-white" dir="ltr" /></div>
+
                 {/* Core Pricing & Profitability Trio (Cost, Price, Margin) */}
                 <div className="bg-slate-900/90 p-4 rounded-2xl border border-white/10 space-y-3 shadow-inner">
                   <div className="flex items-center gap-1.5">
@@ -3680,6 +3721,8 @@ export default function AdminPage() {
                     </datalist>
                   </div>
                 </div>
+
+                <div><label className="block text-xs text-gray-300 mb-1">باركود المنتج (اختياري)</label><input type="text" inputMode="text" autoComplete="off" value={editItemBarcode} onChange={e => setEditItemBarcode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} placeholder="اكتب الباركود أو امسحه بالسكانر" className="w-full bg-slate-900 border border-amber-500/30 rounded-xl p-2.5 text-sm text-white" dir="ltr" /></div>
 
                 {/* Core Pricing & Profitability Trio (Cost, Price, Margin) */}
                 <div className="bg-slate-900/90 p-4 rounded-2xl border border-white/10 space-y-3 shadow-inner">

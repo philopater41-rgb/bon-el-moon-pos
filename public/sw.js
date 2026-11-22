@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bon-pos-shell-v1';
+const CACHE_NAME = 'bon-pos-shell-v2';
 const SHELL_PATH = '/pos';
 
 // Cache only the POS application shell and versioned static assets. Never cache
@@ -16,7 +16,7 @@ async function cacheShell() {
     if (!result.ok) throw new Error(`Could not cache asset: ${asset}`);
     await cache.put(asset, result);
   }));
-  await cache.add('/bon-logo.jpg');
+  await cache.addAll(['/bon-logo.jpg', '/brand-color.jpeg']);
 }
 
 self.addEventListener('install', event => {
@@ -40,7 +40,7 @@ self.addEventListener('fetch', event => {
     }).catch(async () => (await (await caches.open(CACHE_NAME)).match(SHELL_PATH)) || Response.error()));
     return;
   }
-  if (url.pathname.startsWith('/_next/static/') || url.pathname === '/bon-logo.jpg') {
+  if (url.pathname.startsWith('/_next/static/') || (url.pathname === '/bon-logo.jpg' || url.pathname === '/brand-color.jpeg')) {
     event.respondWith(caches.open(CACHE_NAME).then(async cache => {
       const cached = await cache.match(request);
       if (cached) return cached;
