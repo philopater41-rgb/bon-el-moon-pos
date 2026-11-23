@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getBarcodes } from '@/lib/barcodes';
+import { itemStockMarker, parseStock } from '@/lib/item-stock';
 
 // GET: Fetch all active items with recipes and categories
 export async function GET() {
@@ -33,7 +34,7 @@ export async function GET() {
 // POST: Create a new menu item with optional recipe ingredients
 export async function POST(request: Request) {
   try {
-    const { name, price, cost, categoryName, recipe, barcode } = await request.json();
+    const { name, price, cost, categoryName, recipe, barcode, stock } = await request.json();
     const itemName = typeof name === 'string' ? name.trim() : '';
     const normalizedCategoryName = typeof categoryName === 'string' ? categoryName.trim() : '';
     const parsedPrice = Number(price);
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'اسم الصنف والقسم والسعر الصحيح مطلوبون.' }, { status: 400 });
     }
 
+    const stockInput = parseStock(stock);
+    if (stockInput && Array.isArray(recipe) && recipe.some(r => r.rawMaterialId && Number(r.quantity) > 0)) return NextResponse.json({ error: 'تتبع رصيد الصنف لا يجتمع مع وصفة خامات؛ استخدم أحدهما.' }, { status: 400 });
     const normalizedBarcode = typeof barcode === 'string' ? barcode.trim() : '';
     if (normalizedBarcode && !(await getBarcodes())) return NextResponse.json({ error: 'يلزم تجهيز قاعدة البيانات لدعم الباركود أولاً.' }, { status: 503 });
     const itemWithRecipe = await prisma.$transaction(async (tx) => {
@@ -69,6 +72,12 @@ export async function POST(request: Request) {
       });
 
       if (normalizedBarcode) await tx.itemBarcode.create({ data: { itemId: item.id, barcode: normalizedBarcode } });
+      if (stockInput) {
+        if (await tx.rawMaterial.findFirst({ where: { name: itemName, isActive: true } })) throw new Error('توجد خامة بنفس الاسم في المخزون؛ اربطها بالوصفة بدلاً من إنشاء رصيد مكرر.');
+        const material = await tx.rawMaterial.create({ data: { name: `${itemName} ${itemStockMarker(item.id)}`, stockQty: stockInput.quantity, minStockLevel: stockInput.minimum, purchaseUnit: stockInput.unit, deductUnit: stockInput.unit, conversionFactor: 1, costPerPurchaseUnit: parsedCost } });
+        await tx.recipe.create({ data: { itemId: item.id, rawMaterialId: material.id, quantity: 1 } });
+      }
+
 
       // If recipe ingredients were passed, create them
       if (recipe && Array.isArray(recipe) && recipe.length > 0) {
@@ -102,6 +111,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ item: itemWithRecipe }, { status: 201 });
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') return NextResponse.json({ error: 'الباركود مستخدم لصنف آخر بالفعل.' }, { status: 409 });
+    if (error instanceof Error && (error.message.includes('المخزون') || error.message.includes('الكمية'))) return NextResponse.json({ error: error.message }, { status: 400 });
     console.error('Create menu item error:', error);
     return NextResponse.json({ error: 'تعذر إضافة الصنف.' }, { status: 500 });
   }
@@ -110,7 +120,7 @@ export async function POST(request: Request) {
 // PUT: Update an existing menu item and its recipe
 export async function PUT(request: Request) {
   try {
-    const { id, name, price, cost, categoryName, recipe, barcode } = await request.json();
+    const { id, name, price, cost, categoryName, recipe, barcode, stock } = await request.json();
     if (!id) {
       return NextResponse.json({ error: 'معرّف الصنف مطلوب.' }, { status: 400 });
     }
@@ -124,10 +134,25 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'بيانات الصنف غير صحيحة.' }, { status: 400 });
     }
 
+    const stockInput = parseStock(stock);
     const barcodeMap = barcode !== undefined ? await getBarcodes() : null;
     const normalizedBarcode = typeof barcode === 'string' ? barcode.trim() : '';
     if (normalizedBarcode && !barcodeMap) return NextResponse.json({ error: 'يلزم تجهيز قاعدة البيانات لدعم الباركود أولاً.' }, { status: 503 });
     const updatedItem = await prisma.$transaction(async (tx) => {
+      const previousRecipe = await tx.recipe.findMany({ where: { itemId: id }, include: { rawMaterial: true } });
+      const stockRecipe = previousRecipe.find(r => r.rawMaterial.name.endsWith(itemStockMarker(id)));
+      const otherIngredients = Array.isArray(recipe) ? recipe.filter(r => r.rawMaterialId && Number(r.quantity) > 0) : previousRecipe.filter(r => r.id !== stockRecipe?.id);
+      if ((stockInput || stockRecipe) && otherIngredients.length) throw new Error('تتبع رصيد الصنف لا يجتمع مع وصفة خامات؛ استخدم أحدهما.');
+      if (stockInput && stockRecipe) {
+        if (stockInput.unit !== stockRecipe.rawMaterial.deductUnit) throw new Error('لا يمكن تغيير وحدة رصيد موجود تلقائياً.');
+        if (stockInput.expected === undefined) throw new Error('يجب تحديث البيانات قبل تعديل الرصيد.');
+        const changed = await tx.rawMaterial.updateMany({ where: { id: stockRecipe.rawMaterialId, stockQty: stockInput.expected }, data: { stockQty: stockInput.quantity, minStockLevel: stockInput.minimum } });
+        if (changed.count !== 1) throw new Error('تغير رصيد الصنف أثناء التعديل؛ حدّث البيانات وحاول مرة أخرى.');
+      } else if (stockInput) {
+        if (await tx.rawMaterial.findFirst({ where: { name: itemName, isActive: true } })) throw new Error('توجد خامة بنفس الاسم في المخزون؛ اربطها بالوصفة بدلاً من إنشاء رصيد مكرر.');
+        const material = await tx.rawMaterial.create({ data: { name: `${itemName} ${itemStockMarker(id)}`, stockQty: stockInput.quantity, minStockLevel: stockInput.minimum, purchaseUnit: stockInput.unit, deductUnit: stockInput.unit, conversionFactor: 1, costPerPurchaseUnit: Number.isFinite(parsedCost) ? parsedCost : 0 } });
+        await tx.recipe.create({ data: { itemId: id, rawMaterialId: material.id, quantity: 1 } });
+      }
       let categoryId: string | undefined;
       if (normalizedCategoryName) {
         const category = await tx.category.upsert({
@@ -146,12 +171,18 @@ export async function PUT(request: Request) {
           ...(categoryId ? { categoryId } : {}),
         },
       });
+      if (stockRecipe) {
+        const materialName = `${itemName} ${itemStockMarker(id)}`;
+        if (stockRecipe.rawMaterial.name !== materialName || (parsedCost !== undefined && Number.isFinite(parsedCost) && stockRecipe.rawMaterial.costPerPurchaseUnit !== parsedCost)) {
+          await tx.rawMaterial.update({ where: { id: stockRecipe.rawMaterialId }, data: { name: materialName, ...(parsedCost !== undefined && Number.isFinite(parsedCost) ? { costPerPurchaseUnit: parsedCost } : {}) } });
+        }
+      }
       if (barcode !== undefined && barcodeMap) {
         if (normalizedBarcode) await tx.itemBarcode.upsert({ where: { itemId: id }, create: { itemId: id, barcode: normalizedBarcode }, update: { barcode: normalizedBarcode } });
         else await tx.itemBarcode.deleteMany({ where: { itemId: id } });
       }
       if (Array.isArray(recipe)) {
-        await tx.recipe.deleteMany({ where: { itemId: id } });
+        await tx.recipe.deleteMany({ where: { itemId: id, ...(stockRecipe ? { NOT: { id: stockRecipe.id } } : stockInput ? { rawMaterial: { name: { not: `${itemName} ${itemStockMarker(id)}` } } } : {}) } });
         const validIngredients = recipe.filter(
           (r: { rawMaterialId: string; quantity: string | number }) => r.rawMaterialId && Number(r.quantity) > 0
         );
@@ -166,6 +197,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ item: updatedItem });
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') return NextResponse.json({ error: 'الباركود مستخدم لصنف آخر بالفعل.' }, { status: 409 });
+    if (error instanceof Error && (error.message.includes('الرصيد') || error.message.includes('رصيد') || error.message.includes('المخزون') || error.message.includes('الكمية') || error.message.includes('وصفة'))) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('Update menu item error:', error);
     return NextResponse.json({ error: 'تعذر تعديل الصنف.' }, { status: 500 });
   }

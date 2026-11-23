@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getBarcodes } from '@/lib/barcodes';
+import { itemStockMarker } from '@/lib/item-stock';
 
 export async function GET() {
   try {
@@ -60,6 +61,7 @@ export async function GET() {
       // Unit cost: recipe cost if defined, otherwise manual/direct item cost
       const totalUnitCost = totalRecipeCost > 0 ? totalRecipeCost : (item.cost || 0);
 
+      const tracked = item.recipe.find(r => r.rawMaterial.name.endsWith(itemStockMarker(item.id)))?.rawMaterial;
       const profitPerUnit = item.price - totalUnitCost;
       const profitMarginPct = item.price > 0 ? (profitPerUnit / item.price) * 100 : 0;
       const qtySoldToday = todaySoldMap.get(item.id) || 0;
@@ -71,6 +73,7 @@ export async function GET() {
         id: item.id,
         name: item.name,
         barcode: barcodeMap?.get(item.id) || null,
+        stock: tracked ? { quantity: tracked.stockQty, unit: tracked.deductUnit, minimum: tracked.minStockLevel, materialId: tracked.id } : null,
         categoryId: item.categoryId,
         categoryName: item.category?.name || 'عام',
         price: item.price,

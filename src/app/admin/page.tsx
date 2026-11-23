@@ -90,6 +90,7 @@ interface PaymentBreakdown {
 interface ProductCostItem {
   id: string;
   barcode?: string | null;
+  stock?: { quantity: number; unit: 'unit' | 'kg' | 'g'; minimum: number; materialId: string } | null;
   name: string;
   categoryId?: string;
   categoryName: string;
@@ -204,6 +205,9 @@ export default function AdminPage() {
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemBarcode, setNewItemBarcode] = useState('');
+  const [newStockQty, setNewStockQty] = useState('');
+  const [newStockUnit, setNewStockUnit] = useState<'unit' | 'kg' | 'g'>('unit');
+  const [newStockMin, setNewStockMin] = useState('0');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<{ rows: Array<{ row: number; name: string; categoryName: string; price: number; cost: number; barcode: string | null }>; errors: string[] } | null>(null);
   const [importBusy, setImportBusy] = useState(false);
@@ -221,6 +225,9 @@ export default function AdminPage() {
   const [editItemId, setEditItemId] = useState('');
   const [editItemName, setEditItemName] = useState('');
   const [editItemBarcode, setEditItemBarcode] = useState('');
+  const [editStockQty, setEditStockQty] = useState('');
+  const [editStockUnit, setEditStockUnit] = useState<'unit' | 'kg' | 'g'>('unit');
+  const [editStockMin, setEditStockMin] = useState('0');
   const [editItemCategory, setEditItemCategory] = useState('');
   const [editItemCost, setEditItemCost] = useState('');
   const [editItemPrice, setEditItemPrice] = useState('');
@@ -944,6 +951,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           name: newItemName.trim(),
           barcode: newItemBarcode.trim(),
+          ...(newStockQty !== '' ? { stock: { quantity: newStockQty, unit: newStockUnit, minimum: newStockMin } } : {}),
           price: parseFloat(newItemPrice) || 0,
           cost: parseFloat(newItemCost) || 0,
           categoryName: newItemCategory.trim(),
@@ -956,6 +964,7 @@ export default function AdminPage() {
       setShowAddItemModal(false);
       setNewItemName('');
       setNewItemBarcode('');
+      setNewStockQty(''); setNewStockUnit('unit'); setNewStockMin('0');
       setNewItemCategory('');
       setNewItemCost('');
       setNewItemPrice('');
@@ -975,6 +984,9 @@ export default function AdminPage() {
     setEditItemId(item.id);
     setEditItemName(item.name);
     setEditItemBarcode(item.barcode || '');
+    setEditStockQty(item.stock ? String(item.stock.quantity) : '');
+    setEditStockUnit(item.stock?.unit || 'unit');
+    setEditStockMin(String(item.stock?.minimum ?? 0));
     setEditItemCategory(item.categoryName);
     setEditItemPrice(item.price.toString());
     const effectiveCost = item.cost || item.unitCost || 0;
@@ -983,7 +995,7 @@ export default function AdminPage() {
     setEditItemMargin(margin > 0 ? margin.toFixed(1) : '');
     setShowEditItemRecipeSection(item.hasRecipe);
     const preloaded = (item.ingredients || [])
-      .filter((ing) => ing.rawMaterialId)
+      .filter((ing) => ing.rawMaterialId && ing.rawMaterialId !== item.stock?.materialId)
       .map((ing) => {
         const mat = rawMaterials.find((m) => m.id === ing.rawMaterialId);
         const uCost = mat && mat.conversionFactor > 0 ? (mat.costPerPurchaseUnit || 0) / mat.conversionFactor : 0;
@@ -1019,6 +1031,7 @@ export default function AdminPage() {
           id: editItemId,
           name: editItemName.trim(),
           barcode: editItemBarcode.trim(),
+          ...(editStockQty !== '' && (!selectedItemToEdit?.stock || Number(editStockQty) !== selectedItemToEdit.stock.quantity || Number(editStockMin) !== selectedItemToEdit.stock.minimum) ? { stock: { quantity: editStockQty, unit: editStockUnit, minimum: editStockMin, ...(selectedItemToEdit?.stock ? { expected: selectedItemToEdit.stock.quantity } : {}) } } : {}),
           price: parseFloat(editItemPrice) || 0,
           cost: parseFloat(editItemCost) || 0,
           categoryName: editItemCategory.trim(),
@@ -2088,7 +2101,7 @@ export default function AdminPage() {
                         </tr>
                       ) : purchaseInvoices.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="p-8 text-center text-gray-500">
+                          <td colSpan={10} className="p-8 text-center text-gray-500">
                             لا توجد فواتير مشتريات مسجلة حالياً
                           </td>
                         </tr>
@@ -2371,6 +2384,7 @@ export default function AdminPage() {
                     <button
                       onClick={() => {
                         setNewItemName('');
+                        setNewItemBarcode(''); setNewStockQty(''); setNewStockUnit('unit'); setNewStockMin('0');
                         setNewItemCategory('');
                         setNewItemPrice('');
                         setNewItemIngredients([]);
@@ -2411,6 +2425,7 @@ export default function AdminPage() {
                         <th className="p-3">التكلفة الفعلية</th>
                         <th className="p-3">هامش الربح / قطعة</th>
                         <th className="p-3">نسبة الربحية %</th>
+                        <th className="p-3">رصيد المخزون</th>
                         <th className="p-3">مبيعات اليوم (قطع)</th>
                         <th className="p-3">صافي ربح اليوم</th>
                         <th className="p-3 text-center">الإجراءات</th>
@@ -2425,7 +2440,7 @@ export default function AdminPage() {
                         </tr>
                       ) : productCosts.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="p-8 text-center text-gray-500">
+                          <td colSpan={10} className="p-8 text-center text-gray-500">
                             لا توجد أصناف مسجلة حالياً
                           </td>
                         </tr>
@@ -2438,6 +2453,7 @@ export default function AdminPage() {
                             <td className="p-3 font-mono text-amber-400">EGP {item.unitCost.toFixed(2)}</td>
                             <td className="p-3 font-mono text-emerald-400">EGP {item.profitPerUnit.toFixed(2)}</td>
                             <td className="p-3 font-bold text-purple-300">{item.profitMarginPct}%</td>
+                            <td className="p-3 text-amber-300">{item.stock ? `${item.stock.quantity} ${{ unit: 'قطعة', kg: 'كجم', g: 'جرام' }[item.stock.unit]}` : <span className="text-gray-500">غير مربوط بالمخزون</span>}</td>
                             <td className="p-3 font-bold text-white">{item.qtySoldToday}</td>
                             <td className="p-3 font-mono font-bold text-emerald-400">EGP {item.totalProfitToday.toFixed(2)}</td>
                             <td className="p-3 text-center">
@@ -2527,7 +2543,7 @@ export default function AdminPage() {
                       ) : (
                         rawMaterials.map((mat) => (
                           <tr key={mat.id} className="hover:bg-white/5">
-                            <td className="p-3 font-semibold text-white">{mat.name}</td>
+                            <td className="p-3 font-semibold text-white">{mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}</td>
                             <td className="p-3 font-mono font-bold text-cyan-400">{mat.stockQty} {mat.deductUnit}</td>
                             <td className="p-3 text-gray-400">{mat.minStockLevel} {mat.deductUnit}</td>
                             <td className="p-3 font-mono text-amber-300">EGP {mat.costPerPurchaseUnit?.toFixed(2) || '0.00'} / {mat.purchaseUnit}</td>
@@ -2540,8 +2556,9 @@ export default function AdminPage() {
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   onClick={() => openEditMaterialModal(mat)}
+                                  disabled={mat.name.includes("[product-stock:")}
                                   className="px-2 py-1 rounded-lg text-cyan-400 hover:text-white hover:bg-cyan-500/20 border border-cyan-500/20 inline-flex items-center gap-1 text-xs transition-all active:scale-95"
-                                  title="تعديل بيانات الخامة"
+                                  title={mat.name.includes("[product-stock:") ? "عدّل الرصيد من شاشة الأصناف" : "تعديل بيانات الخامة"}
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
                                   <span>تعديل</span>
@@ -3399,6 +3416,16 @@ export default function AdminPage() {
 
                 <div><label className="block text-xs text-gray-300 mb-1">باركود المنتج (اختياري)</label><input type="text" inputMode="text" autoComplete="off" value={newItemBarcode} onChange={e => setNewItemBarcode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} placeholder="اكتب الباركود أو امسحه بالسكانر" className="w-full bg-slate-900 border border-amber-500/30 rounded-xl p-2.5 text-sm text-white" dir="ltr" /></div>
 
+                <div className="rounded-xl border border-amber-500/30 bg-slate-900/60 p-3 space-y-2">
+                  <p className="text-sm font-bold text-amber-300">رصيد الصنف (اختياري)</p>
+                  <p className="text-xs text-gray-300">اترك الكمية فارغة لو الرصيد غير معروف. عند تسجيله، بيع كل وحدة يخصم 1 من نفس الوحدة. لا تستخدمه مع وصفة خامات. لو الصنف له خامة مسجلة بالفعل، اربطها بالوصفة بدلاً من تكرار الرصيد.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <label className="text-xs text-gray-300">الكمية المتاحة<input aria-label="الكمية المتاحة" type="number" min="0" step={newStockUnit === 'unit' ? '1' : 'any'} value={newStockQty} onChange={e => setNewStockQty(e.target.value)} placeholder="غير مسجل" className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white" /></label>
+                    <label className="text-xs text-gray-300">الوحدة<select aria-label="وحدة المخزون" value={newStockUnit} onChange={e => setNewStockUnit(e.target.value as 'unit' | 'kg' | 'g')} className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white"><option value="unit">قطعة</option><option value="kg">كيلوجرام</option><option value="g">جرام</option></select></label>
+                    <label className="text-xs text-gray-300">حد تنبيه النواقص<input aria-label="حد تنبيه النواقص" type="number" min="0" step={newStockUnit === 'unit' ? '1' : 'any'} value={newStockMin} onChange={e => setNewStockMin(e.target.value)} className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white" /></label>
+                  </div>
+                </div>
+
                 {/* Core Pricing & Profitability Trio (Cost, Price, Margin) */}
                 <div className="bg-slate-900/90 p-4 rounded-2xl border border-white/10 space-y-3 shadow-inner">
                   <div className="flex items-center gap-1.5">
@@ -3723,6 +3750,16 @@ export default function AdminPage() {
                 </div>
 
                 <div><label className="block text-xs text-gray-300 mb-1">باركود المنتج (اختياري)</label><input type="text" inputMode="text" autoComplete="off" value={editItemBarcode} onChange={e => setEditItemBarcode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} placeholder="اكتب الباركود أو امسحه بالسكانر" className="w-full bg-slate-900 border border-amber-500/30 rounded-xl p-2.5 text-sm text-white" dir="ltr" /></div>
+
+                <div className="rounded-xl border border-amber-500/30 bg-slate-900/60 p-3 space-y-2">
+                  <p className="text-sm font-bold text-amber-300">رصيد الصنف (اختياري)</p>
+                  <p className="text-xs text-gray-300">اترك الكمية فارغة لو الرصيد غير معروف. عند تسجيله، بيع كل وحدة يخصم 1 من نفس الوحدة. لا تستخدمه مع وصفة خامات. لو الصنف له خامة مسجلة بالفعل، اربطها بالوصفة بدلاً من تكرار الرصيد.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <label className="text-xs text-gray-300">الكمية المتاحة<input aria-label="الكمية المتاحة" type="number" min="0" step={editStockUnit === 'unit' ? '1' : 'any'} value={editStockQty} onChange={e => setEditStockQty(e.target.value)} placeholder="غير مسجل" className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white" /></label>
+                    <label className="text-xs text-gray-300">الوحدة<select aria-label="وحدة المخزون" value={editStockUnit} onChange={e => setEditStockUnit(e.target.value as 'unit' | 'kg' | 'g')} disabled={Boolean(selectedItemToEdit?.stock)} className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white"><option value="unit">قطعة</option><option value="kg">كيلوجرام</option><option value="g">جرام</option></select></label>
+                    <label className="text-xs text-gray-300">حد تنبيه النواقص<input aria-label="حد تنبيه النواقص" type="number" min="0" step={editStockUnit === 'unit' ? '1' : 'any'} value={editStockMin} onChange={e => setEditStockMin(e.target.value)} className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white" /></label>
+                  </div>
+                </div>
 
                 {/* Core Pricing & Profitability Trio (Cost, Price, Margin) */}
                 <div className="bg-slate-900/90 p-4 rounded-2xl border border-white/10 space-y-3 shadow-inner">
