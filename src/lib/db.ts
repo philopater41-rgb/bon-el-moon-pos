@@ -17,7 +17,7 @@ function getPrismaClient(): PrismaClient {
       neonConfig.webSocketConstructor = require('ws');
     }
     const adapter = new PrismaNeon({ connectionString: dbUrl });
-    return new PrismaClient({ adapter });
+    return new PrismaClient({ adapter, transactionOptions: { maxWait: 30000, timeout: 30000 } });
   }
 
   // SQLite / Local using LibSQL adapter

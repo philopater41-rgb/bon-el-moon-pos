@@ -808,7 +808,7 @@ export default function POSPage() {
       const tracked = newOrder.items.some(line => items.find(item => item.id === line.itemId)?.tracksInventory !== false || line.modifiers.length > 0);
       const mustVerify = Boolean(uncertainOrder) || tracked || (isOnline && newOrder.items.length > 0);
       if (mustVerify) {
-        if (!isOnline) { triggerAlert('error', 'يلزم الاتصال بالخادم لتأكيد بيع أصناف المخزون ومنع بيع أكثر من المتاح.'); return; }
+        if (!isOnline) { const message = 'يلزم الاتصال بالخادم لتأكيد الفاتورة ومنع بيع أكثر من المتاح.'; if (uncertainOrder) setVerificationMessage(message); else triggerAlert('error', message); return; }
         confirmingOrderRef.current = true;
         setConfirmingOrder(true);
         localStorage.setItem('bon_uncertain_stock_order', JSON.stringify(newOrder));
@@ -830,19 +830,19 @@ export default function POSPage() {
       await offlineDB.salesOrders.put(newOrder);
 
       // 2. Local shift statistics updates
-      if (activeShift && !wasAlreadyStored) {
+      if (activeShift && activeShift.id === newOrder.shiftId && !wasAlreadyStored) {
         const updatedExpected = { ...activeShift };
         const orderNet = newOrder.total;
-        if (paymentMethod === 'CASH') {
+        if (newOrder.paymentMethod === 'CASH') {
           updatedExpected.expectedCash = (updatedExpected.expectedCash || 0) + orderNet;
-        } else if (paymentMethod === 'INSTAPAY') {
+        } else if (newOrder.paymentMethod === 'INSTAPAY') {
           updatedExpected.expectedInstaPay = (updatedExpected.expectedInstaPay || 0) + orderNet;
-        } else if (paymentMethod === 'VISA') {
+        } else if (newOrder.paymentMethod === 'VISA') {
           updatedExpected.expectedVisa = (updatedExpected.expectedVisa || 0) + orderNet;
-        } else if (paymentMethod === 'VODAFONE_CASH') {
+        } else if (newOrder.paymentMethod === 'VODAFONE_CASH') {
           updatedExpected.expectedVodafoneCash = (updatedExpected.expectedVodafoneCash || 0) + orderNet;
-        } else if (paymentMethod === 'CASH_OUT') {
-          const handedCash = cOutAmt;
+        } else if (newOrder.paymentMethod === 'CASH_OUT') {
+          const handedCash = newOrder.cashOutAmount || 0;
           updatedExpected.expectedCash = (updatedExpected.expectedCash || 0) - handedCash;
           updatedExpected.expectedVisa = (updatedExpected.expectedVisa || 0) + orderNet;
           updatedExpected.expectedCashOut = (updatedExpected.expectedCashOut || 0) + handedCash;
@@ -851,9 +851,9 @@ export default function POSPage() {
       }
 
       // 3. Set table status to VACANT
-      if (cart.orderType === 'DINE_IN' && cart.tableId) {
-        await offlineDB.diningTables.update(cart.tableId, { status: 'VACANT' });
-        setTables((prev) => prev.map((t) => (t.id === cart.tableId ? { ...t, status: 'VACANT' } : t)));
+      if (newOrder.orderType === 'DINE_IN' && newOrder.tableId) {
+        await offlineDB.diningTables.update(newOrder.tableId, { status: 'VACANT' });
+        setTables((prev) => prev.map((t) => (t.id === newOrder.tableId ? { ...t, status: 'VACANT' } : t)));
       }
 
       // Clear active cart
