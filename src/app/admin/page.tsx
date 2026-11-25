@@ -1374,10 +1374,10 @@ export default function AdminPage() {
                 </div>
               )}
 
-              <button type="button" onClick={() => setActiveTab('inventory')} className="w-full text-right rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-200">
-                <strong>تنبيه النواقص: {loadingInventory ? 'جاري التحميل...' : `${rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).length} أصناف وخامات`}</strong>
-                <span className="block text-xs mt-1">{rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).map(mat => mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')).slice(0, 5).join('، ') || 'اضغط لعرض المخزون وحدود التنبيه'}</span>
-              </button>
+              <div className="w-full text-right rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-200">
+                <button type="button" onClick={() => setActiveTab('inventory')} className="text-right font-bold">تنبيه النواقص: {loadingInventory ? 'جاري التحميل...' : `${rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).length} أصناف وخامات`} — عرض المخزون</button>
+                {!loadingInventory && rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).length === 0 ? <p className="text-xs mt-2">لا توجد أصناف أو خامات تحت حد التنبيه.</p> : <ul className="grid gap-1 mt-2 text-xs sm:grid-cols-2 lg:grid-cols-3">{rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).sort((a, b) => a.name.localeCompare(b.name, 'ar')).map(mat => <li key={mat.id} className="rounded-lg bg-black/20 p-2"><span>{mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}</span><span className="block mt-1">المتاح: {mat.stockQty} {({ unit: 'قطعة', kg: 'كجم', g: 'جرام' } as Record<string, string>)[mat.deductUnit] || mat.deductUnit} — حد التنبيه: {mat.minStockLevel}</span></li>)}</ul>}
+              </div>
               {/* Top Financial KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="glass-panel p-4 rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-950/20 to-transparent">
