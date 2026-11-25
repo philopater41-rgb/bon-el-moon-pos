@@ -242,16 +242,6 @@ export default function POSPage() {
     return () => window.removeEventListener('bon-sync-completed', refreshShift);
   }, [showCloseShift, setActiveShift]);
 
-  // Auto-close print modal when silent printing completes
-  useEffect(() => {
-    const handleAfterPrint = () => {
-      setShowPrintModal(false);
-      setReceiptOrder(null);
-    };
-    window.addEventListener('afterprint', handleAfterPrint);
-    return () => window.removeEventListener('afterprint', handleAfterPrint);
-  }, []);
-
   const handleAutoFillExpected = () => {
     if (!activeShift) return;
     setClosedCash(String((activeShift.expectedCash || 0).toFixed(2)));
@@ -839,10 +829,6 @@ export default function POSPage() {
       setShowPrintModal(true);
       setTimeout(() => {
         window.print();
-        setTimeout(() => {
-          setShowPrintModal(false);
-          setReceiptOrder(null);
-        }, 800);
       }, 150);
 
       triggerAlert('success', 'تم حفظ الأوردر وتقفيل الحساب!');
@@ -1351,6 +1337,7 @@ export default function POSPage() {
               <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[120px] overflow-y-auto pl-1">
                 {tables
                   .filter((t) => t.hallId === activeHallId)
+                  .sort((a, b) => { const isEleven = (name: string) => /(?:table|تيبول|ترابيزة|طاولة)\s*11$/i.test(name.trim()); return Number(isEleven(a.name)) - Number(isEleven(b.name)) || a.name.localeCompare(b.name, undefined, { numeric: true }); })
                   .map((table) => (
                     <button
                       key={table.id}
@@ -1929,6 +1916,7 @@ export default function POSPage() {
                 </>}
               </div>
 
+              <p className="mt-3 text-xs text-amber-300">في نافذة الطباعة اختَر XP-80C من خانة الطابعة أو الوجهة بدل «حفظ كملف PDF». تقدر تعيد المحاولة من هنا.</p>
               <div className="grid grid-cols-2 gap-3 mt-4">
                 <button onClick={() => { setShowPrintModal(false); setReceiptOrder(null); }} className="py-2.5 border border-white/10 text-white rounded-xl text-xs">قفل</button>
                 <button onClick={() => window.print()} className="py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1">
