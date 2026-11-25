@@ -10,7 +10,7 @@ export async function GET() {
 
     const materialsWithStatus = rawMaterials.map((mat) => ({
       ...mat,
-      isLowStock: mat.stockQty < mat.minStockLevel,
+      isLowStock: (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel),
     }));
 
     return NextResponse.json({ rawMaterials: materialsWithStatus });

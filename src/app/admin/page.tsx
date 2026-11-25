@@ -1375,8 +1375,8 @@ export default function AdminPage() {
               )}
 
               <div className="w-full text-right rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-200">
-                <button type="button" onClick={() => setActiveTab('inventory')} className="text-right font-bold">تنبيه النواقص: {loadingInventory ? 'جاري التحميل...' : `${rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).length} أصناف وخامات`} — عرض المخزون</button>
-                {!loadingInventory && rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).length === 0 ? <p className="text-xs mt-2">لا توجد أصناف أو خامات تحت حد التنبيه.</p> : <ul className="grid gap-1 mt-2 text-xs sm:grid-cols-2 lg:grid-cols-3">{rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).sort((a, b) => a.name.localeCompare(b.name, 'ar')).map(mat => <li key={mat.id} className="rounded-lg bg-black/20 p-2"><span>{mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}</span><span className="block mt-1">المتاح: {mat.stockQty} {({ unit: 'قطعة', kg: 'كجم', g: 'جرام' } as Record<string, string>)[mat.deductUnit] || mat.deductUnit} — حد التنبيه: {mat.minStockLevel}</span></li>)}</ul>}
+                <button type="button" onClick={() => setActiveTab('inventory')} className="text-right font-bold">تنبيه النواقص: {loadingInventory ? 'جاري التحميل...' : `${rawMaterials.filter(mat => (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel)).length} أصناف وخامات`} — عرض المخزون</button>
+                {!loadingInventory && rawMaterials.filter(mat => (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel)).length === 0 ? <p className="text-xs mt-2">لا توجد أصناف أو خامات تحت حد التنبيه.</p> : <ul className="grid gap-1 mt-2 text-xs sm:grid-cols-2 lg:grid-cols-3">{rawMaterials.filter(mat => (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel)).sort((a, b) => a.name.localeCompare(b.name, 'ar')).map(mat => <li key={mat.id} className="rounded-lg bg-black/20 p-2"><span>{mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}</span><span className="block mt-1">المتاح: {mat.stockQty} {({ unit: 'قطعة', kg: 'كجم', g: 'جرام' } as Record<string, string>)[mat.deductUnit] || mat.deductUnit} — حد التنبيه: {mat.minStockLevel}</span></li>)}</ul>}
               </div>
               {/* Top Financial KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2555,8 +2555,8 @@ export default function AdminPage() {
                             <td className="p-3 text-gray-400">{mat.minStockLevel} {mat.deductUnit}</td>
                             <td className="p-3 font-mono text-amber-300">EGP {mat.costPerPurchaseUnit?.toFixed(2) || '0.00'} / {mat.purchaseUnit}</td>
                             <td className="p-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] ${mat.stockQty < mat.minStockLevel ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
-                                {mat.stockQty < mat.minStockLevel ? 'ناقص' : 'آمن'}
+                              <span className={`px-2 py-0.5 rounded text-[10px] ${(mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel) ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                {(mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel) ? 'ناقص' : 'آمن'}
                               </span>
                             </td>
                             <td className="p-3 text-center">
