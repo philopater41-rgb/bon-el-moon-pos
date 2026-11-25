@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { itemStockMarker } from '@/lib/item-stock';
 
 // GET: Fetch all order returns
 export async function GET(request: Request) {
@@ -92,7 +93,9 @@ export async function POST(request: Request) {
       const requested = new Map<string, number>();
       for (const it of items || []) {
         const qty = Number(it.quantity);
-        if (!it.itemId || !Number.isInteger(qty) || qty <= 0 || !Number.isFinite(Number(it.refundPrice)) || Number(it.refundPrice) < 0) throw new Error('بيانات صنف المرتجع غير صالحة');
+        if (!it.itemId || !Number.isFinite(qty) || qty <= 0 || Math.abs(qty * 1000 - Math.round(qty * 1000)) > 1e-7 || !Number.isFinite(Number(it.refundPrice)) || Number(it.refundPrice) < 0) throw new Error('بيانات صنف المرتجع غير صالحة');
+        const tracked = await tx.recipe.findFirst({ where: { itemId: it.itemId, rawMaterial: { name: { endsWith: itemStockMarker(it.itemId) } } }, include: { rawMaterial: true } });
+        if ((!tracked || !['kg', 'g'].includes(tracked.rawMaterial.deductUnit)) && !Number.isInteger(qty)) throw new Error('كمية القطع المرتجعة يجب أن تكون عددًا صحيحًا');
         requested.set(it.itemId, (requested.get(it.itemId) || 0) + qty);
       }
       for (const [itemId, qty] of requested) {

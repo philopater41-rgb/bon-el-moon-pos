@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useAppStore } from '@/lib/store';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { createBarcodeScanner } from '@/lib/barcode-scanner';
+import { parseWeightInput } from '@/lib/weight-quantity';
 import {
   offlineDB,
   type LocalCategory,
@@ -38,7 +39,7 @@ const scheduleEffect = (work: () => void) => {
 };
 
 interface POSInitialization {
-  categories: Array<LocalCategory & { items: Array<Pick<LocalItem, 'id' | 'name' | 'price' | 'barcode' | 'stock'>> }>;
+  categories: Array<LocalCategory & { items: Array<Pick<LocalItem, 'id' | 'name' | 'price' | 'barcode' | 'stock' | 'tracksInventory'>> }>;
   modifiers: LocalModifier[];
   halls: Array<LocalHall & { tables: Array<Pick<LocalTable, 'id' | 'name' | 'status'>> }>;
   customers?: LocalCustomer[];
@@ -106,6 +107,11 @@ export default function POSPage() {
   const [categories, setCategories] = useState<LocalCategory[]>([]);
   const [items, setItems] = useState<LocalItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState('');
+  const [uncertainOrder, setUncertainOrder] = useState<LocalSalesOrder | null>(null);
+  const [confirmingOrder, setConfirmingOrder] = useState(false);
+  const confirmingOrderRef = useRef(false);
+  const [verificationMessage, setVerificationMessage] = useState('لم يتأكد رد الخادم على الفاتورة. أعد المحاولة للتحقق من نفس الفاتورة قبل إجراء بيع آخر.');
+  useEffect(() => { return scheduleEffect(() => { try { const saved = localStorage.getItem('bon_uncertain_stock_order'); if (saved) setUncertainOrder(JSON.parse(saved)); } catch { /* Keep the lock until the saved transaction is investigated. */ } }); }, []);
   const [menuSearch, setMenuSearch] = useState('');
   const draggedCategory = useRef<string | null>(null);
   const scannerHandler = useRef<(code: string) => void>(() => {});
@@ -294,7 +300,7 @@ export default function POSPage() {
           const allItems: LocalItem[] = [];
           data.categories.forEach((c) => {
             c.items.forEach((i) => {
-              allItems.push({ id: i.id, name: i.name, price: i.price, barcode: i.barcode, stock: i.stock, categoryId: c.id });
+              allItems.push({ id: i.id, name: i.name, price: i.price, barcode: i.barcode, stock: i.stock, tracksInventory: i.tracksInventory, categoryId: c.id });
             });
           });
           await offlineDB.items.bulkPut(allItems);
@@ -455,9 +461,14 @@ export default function POSPage() {
     item: LocalItem,
     selectedModList: LocalModifier[],
     customUnitPrice?: number,
-    comment = ''
+    comment = '',
+    quantity = 1
   ) => {
     if (!cart) return;
+    if (item.stock) {
+      const inCart = cart.items.filter(line => line.itemId === item.id).reduce((sum, line) => sum + line.qty, 0);
+      if (inCart + quantity > item.stock.quantity + 1e-8) { triggerAlert('error', `المخزون المتاح للصنف ${item.name}: ${item.stock.quantity} ${item.stock.unit}`); return; }
+    }
 
     const modPriceImpact = selectedModList.reduce((acc, m) => acc + m.priceImpact, 0);
     const unitPrice = customUnitPrice ?? (item.price + modPriceImpact);
@@ -477,17 +488,17 @@ export default function POSPage() {
       const existing = updatedItems[existingIndex];
       updatedItems[existingIndex] = {
         ...existing,
-        qty: existing.qty + 1,
-        totalPrice: (existing.qty + 1) * unitPrice,
+        qty: Math.round((existing.qty + quantity) * 1000) / 1000,
+        totalPrice: (Math.round((existing.qty + quantity) * 1000) / 1000) * unitPrice,
       };
     } else {
       const newItem: LocalCartItem = {
         id: generateUUID(),
         itemId: item.id,
         name: item.name,
-        qty: 1,
+        qty: quantity,
         unitPrice,
-        totalPrice: unitPrice,
+        totalPrice: quantity * unitPrice,
         comment: comment || null,
         modifiers: selectedModList.map((m) => ({
           modifierId: m.id,
@@ -507,6 +518,17 @@ export default function POSPage() {
   };
 
 
+  const askWeight = (item: LocalItem): number | null => {
+    if (!item.stock || !['kg', 'g'].includes(item.stock.unit)) return 1;
+    const stockUnit = item.stock.unit as 'kg' | 'g';
+    const unit = stockUnit === 'kg' ? 'كيلوجرام؛ مثال 0.25 أو 250 جرام' : 'جرام؛ مثال 250 أو 0.25 كيلو';
+    const input = window.prompt(`أدخل كمية ${item.name} بـ${unit}`, '');
+    if (input === null) return null;
+    const quantity = parseWeightInput(input, stockUnit);
+    if (quantity === null) { triggerAlert('error', 'أدخل وزنًا صحيحًا أكبر من صفر، مثل 0.25 كيلو أو 250 جرام.'); return null; }
+    return quantity;
+  };
+
   // Add Item to Cart
   const handleItemClick = (item: LocalItem) => {
     if (!ensureActiveShift()) return;
@@ -523,8 +545,8 @@ export default function POSPage() {
       return;
     }
 
-    // Add item directly to cart instantly
-    void addItemToCartDirectly(item, []);
+    const quantity = askWeight(item);
+    if (quantity !== null) void addItemToCartDirectly(item, [], undefined, "", quantity);
   };
 
   const handleBarcode = (value: string) => {
@@ -576,7 +598,9 @@ export default function POSPage() {
   const confirmModifiers = () => {
     if (!activeItemForMod) return;
     const selectedModObjects = modifiers.filter((m) => selectedMods.includes(m.id));
-    addItemToCartDirectly(activeItemForMod, selectedModObjects, undefined, itemComment.trim());
+    const quantity = askWeight(activeItemForMod);
+    if (quantity === null) return;
+    void addItemToCartDirectly(activeItemForMod, selectedModObjects, undefined, itemComment.trim(), quantity);
     setShowModifiersModal(false);
     setActiveItemForMod(null);
     setItemComment('');
@@ -584,9 +608,15 @@ export default function POSPage() {
 
   const handleUpdateQty = async (cartItemId: string, delta: number) => {
     if (!cart) return;
+    const target = cart.items.find(line => line.id === cartItemId);
+    const product = items.find(item => item.id === target?.itemId);
+    const weighted = product?.stock && ['kg', 'g'].includes(product.stock.unit);
+    const step = weighted ? (product.stock?.unit === 'kg' ? 0.25 : 1) : 1;
+    if (target && product?.stock && delta > 0 && cart.items.filter(line => line.itemId === product.id).reduce((sum, line) => sum + line.qty, 0) + step > product.stock.quantity + 1e-8) { triggerAlert('error', `المتاح ${product.stock.quantity} ${product.stock.unit}`); return; }
     const updatedItems = cart.items.map((item) => {
       if (item.id === cartItemId) {
-        const newQty = Math.max(1, item.qty + delta);
+        const newQty = Math.round((item.qty + delta * step) * 1000) / 1000;
+        if (newQty <= 0) return item;
         return {
           ...item,
           qty: newQty,
@@ -713,11 +743,12 @@ export default function POSPage() {
 
   // 5. Complete / Place Order
   const handleCompleteOrder = async () => {
-    if (!cart || (paymentMethod !== 'CASH_OUT' && cart.items.length === 0)) {
+    if (confirmingOrderRef.current) return;
+    if (!cart || (!uncertainOrder && paymentMethod !== 'CASH_OUT' && cart.items.length === 0)) {
       triggerAlert('error', 'الفاتورة فاضية مقدرش أقفلها');
       return;
     }
-    if (paymentMethod === 'CASH_OUT' && (cart.items.length > 0 || !cashOutValid)) {
+    if (!uncertainOrder && paymentMethod === 'CASH_OUT' && (cart.items.length > 0 || !cashOutValid)) {
       triggerAlert('error', 'الكاش آوت عملية منفصلة: أفرغ السلة واكتب مبلغ السحب والعمولة بشكل صحيح');
       return;
     }
@@ -728,7 +759,7 @@ export default function POSPage() {
       return;
     }
 
-    if (cart.discount > 0 && !discountReason.trim()) {
+    if (!uncertainOrder && cart.discount > 0 && !discountReason.trim()) {
       triggerAlert('error', 'اكتب أو اختر سبب الخصم قبل إتمام الفاتورة.');
       return;
     }
@@ -741,7 +772,7 @@ export default function POSPage() {
       const cOutAmt = isCashOut ? cashOutValue : 0;
       const cOutFee = isCashOut ? cashOutCharge : 0;
 
-      const newOrder: LocalSalesOrder = {
+      const newOrder: LocalSalesOrder = uncertainOrder || {
         id: orderId,
         receiptNumber: generateReceiptNumber(),
         shiftId: activeShift.id,
@@ -774,11 +805,32 @@ export default function POSPage() {
         syncStatus: 'PENDING',
       };
 
-      // 1. Save order to Dexie offline sales queue
+      const tracked = newOrder.items.some(line => items.find(item => item.id === line.itemId)?.tracksInventory !== false || line.modifiers.length > 0);
+      const mustVerify = Boolean(uncertainOrder) || tracked || (isOnline && newOrder.items.length > 0);
+      if (mustVerify) {
+        if (!isOnline) { triggerAlert('error', 'يلزم الاتصال بالخادم لتأكيد بيع أصناف المخزون ومنع بيع أكثر من المتاح.'); return; }
+        confirmingOrderRef.current = true;
+        setConfirmingOrder(true);
+        localStorage.setItem('bon_uncertain_stock_order', JSON.stringify(newOrder));
+        setUncertainOrder(newOrder);
+        let response: Response;
+        try { response = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orders: [newOrder] }) }); }
+        catch { confirmingOrderRef.current = false; setConfirmingOrder(false); setVerificationMessage('تعذر الوصول للخادم. أعد المحاولة للتحقق من نفس الفاتورة بعد الاتصال.'); return; }
+        let result: { syncedIds?: string[]; errors?: Array<{ message: string }> };
+        try { result = await response.json(); } catch { confirmingOrderRef.current = false; setConfirmingOrder(false); setVerificationMessage('رد الخادم غير واضح. أعد المحاولة للتحقق من نفس الفاتورة.'); return; }
+        if (!response.ok || !result.syncedIds?.includes(newOrder.id)) {
+          const message = result.errors?.[0]?.message || 'تعذر التأكد من الفاتورة؛ أعد المحاولة بنفس الفاتورة.';
+          if (response.ok && (message.includes('المخزون غير كاف') || message.includes('كمية الصنف غير صالحة'))) { localStorage.removeItem('bon_uncertain_stock_order'); setUncertainOrder(null); void loadPOSData(); triggerAlert('error', message); } else { setVerificationMessage(message); }
+          confirmingOrderRef.current = false; setConfirmingOrder(false); return;
+        }
+        newOrder.syncStatus = 'SYNCED';
+      }
+      // Persist the confirmed order before releasing the retry lock.
+      const wasAlreadyStored = (await offlineDB.salesOrders.get(newOrder.id))?.syncStatus === 'SYNCED';
       await offlineDB.salesOrders.put(newOrder);
 
       // 2. Local shift statistics updates
-      if (activeShift) {
+      if (activeShift && !wasAlreadyStored) {
         const updatedExpected = { ...activeShift };
         const orderNet = newOrder.total;
         if (paymentMethod === 'CASH') {
@@ -805,7 +857,9 @@ export default function POSPage() {
       }
 
       // Clear active cart
-      await offlineDB.carts.delete(cart.id);
+      const orderCartId = newOrder.tableId || 'takeaway';
+      await offlineDB.carts.delete(orderCartId);
+      if (mustVerify) { localStorage.removeItem('bon_uncertain_stock_order'); setUncertainOrder(null); confirmingOrderRef.current = false; setConfirmingOrder(false); void loadPOSData(); }
       setCart({
         ...cart,
         items: [],
@@ -834,6 +888,7 @@ export default function POSPage() {
       triggerAlert('success', 'تم حفظ الأوردر وتقفيل الحساب!');
       triggerSync();
     } catch (e) {
+      confirmingOrderRef.current = false; setConfirmingOrder(false);
       console.error('Failed to complete order:', e);
       triggerAlert('error', 'حصل خطأ ومقدرناش نحفظ الأوردر.');
     }
@@ -1089,7 +1144,7 @@ export default function POSPage() {
                 <tr key={idx}>
                   <td>{itDetails?.name || 'صنف'}{item.comment && <span className="receipt-addition">{item.comment}</span>}{item.modifiers.length > 0 && <span className="receipt-addition">إضافة {additionsTotal.toFixed(2)}</span>}</td>
                   <td>{baseUnitPrice.toFixed(2)}</td>
-                  <td>x{item.qty}</td>
+                  <td>{item.qty} {itDetails?.stock?.unit === 'kg' ? 'كجم' : itDetails?.stock?.unit === 'g' ? 'جرام' : 'قطعة'}</td>
                   <td>{item.totalPrice.toFixed(2)}</td>
                 </tr>
               );
@@ -1149,7 +1204,7 @@ export default function POSPage() {
                     {item.modifiers.length > 0 && <span className="receipt-addition">إضافات: {item.modifiers.map(mod => modifiers.find(candidate => candidate.id === mod.modifierId)?.name || 'إضافة').join('، ')}</span>}
                     {item.comment && <span className="receipt-addition">ملاحظة: {item.comment}</span>}
                   </td>
-                  <td className="kot-item-qty-col">{item.qty}</td>
+                  <td className="kot-item-qty-col">{item.qty} {itDetails?.stock?.unit === 'kg' ? 'كجم' : itDetails?.stock?.unit === 'g' ? 'جرام' : ''}</td>
                 </tr>
               );
             })}
@@ -1384,7 +1439,7 @@ export default function POSPage() {
                 )}
               </div>
 
-              <div className="text-xs text-amber-300">{items.filter(item => item.stock && item.stock.quantity < item.stock.minimum).length > 0 && `تنبيه: ${items.filter(item => item.stock && item.stock.quantity < item.stock.minimum).length} أصناف تحت حد النواقص عند آخر تحديث`}</div>
+              <div className="text-xs text-amber-300">{items.filter(item => item.stock && (item.stock.quantity <= 0 || item.stock.quantity < item.stock.minimum)).length > 0 && `تنبيه: ${items.filter(item => item.stock && (item.stock.quantity <= 0 || item.stock.quantity < item.stock.minimum)).length} أصناف تحت حد النواقص عند آخر تحديث`}</div>
               <div className="flex items-center gap-3"><input aria-label="بحث في القسم" value={menuSearch} onChange={event => setMenuSearch(event.target.value)} placeholder="ابحث عن صنف في القسم" className="flex-1 rounded-lg bg-slate-950 border border-white/10 px-3 py-2 text-sm" /><span className="text-xs text-gray-300">عدد الأصناف: {items.length}</span></div>
               <div className="flex-1 overflow-y-auto pl-1">
                 {loadingPOS && items.length === 0 ? (
@@ -1403,7 +1458,7 @@ export default function POSPage() {
                           className="glass-panel-hover flex flex-col justify-between p-3.5 rounded-xl text-right bg-slate-900/40 border border-white/5 h-[95px] cursor-pointer hover:border-cyan-500/30"
                         >
                           <span className="font-semibold text-xs text-white line-clamp-2">{item.name}</span>
-                          {item.stock && <span className={`text-[10px] ${item.stock.quantity < item.stock.minimum ? "text-rose-400" : "text-gray-400"}`}>الرصيد عند آخر تحديث: {item.stock.quantity} {({ unit: "قطعة", kg: "كجم", g: "جرام" } as Record<string, string>)[item.stock.unit] || item.stock.unit}</span>}
+                          {item.stock && <span className={`text-[10px] ${(item.stock.quantity <= 0 || item.stock.quantity < item.stock.minimum) ? "text-rose-400" : "text-gray-400"}`}>الرصيد عند آخر تحديث: {item.stock.quantity} {({ unit: "قطعة", kg: "كجم", g: "جرام" } as Record<string, string>)[item.stock.unit] || item.stock.unit}</span>}
                           <div className="flex items-center justify-between w-full mt-2 flex-row-reverse">
                             <span className="text-cyan-400 font-bold text-xs">EGP {item.price.toFixed(2)}</span>
                             <PlusCircle className="w-4 h-4 text-cyan-400/80" />
@@ -1520,7 +1575,7 @@ export default function POSPage() {
                     </div>
 
                     <div className="flex items-center justify-between border-t border-white/5 pt-1.5 flex-row-reverse">
-                      <span className="text-[10px] text-gray-400">EGP {item.unitPrice.toFixed(2)} / واحد</span>
+                      <span className="text-[10px] text-gray-400">EGP {item.unitPrice.toFixed(2)} / {items.find(product => product.id === item.itemId)?.stock?.unit === 'kg' ? 'كجم' : items.find(product => product.id === item.itemId)?.stock?.unit === 'g' ? 'جرام' : 'واحد'}</span>
                       <div className="flex items-center gap-2 flex-row-reverse">
                         <button onClick={() => handleUpdateQty(item.id, 1)} className="p-1 rounded bg-white/5 hover:bg-white/10 text-gray-300"><Plus className="w-3 h-3" /></button>
                         <span className="text-xs font-bold text-white w-4 text-center">{item.qty}</span>
@@ -2173,6 +2228,7 @@ export default function POSPage() {
         )}
       </div>
 
+      {uncertainOrder && <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-6 no-print"><div className="max-w-md bg-slate-900 rounded-xl p-6 space-y-4 text-right" dir="rtl"><p className="text-amber-300">{verificationMessage}</p><button type="button" disabled={confirmingOrder} onClick={() => void handleCompleteOrder()} className="rounded-lg bg-cyan-700 px-4 py-2 text-white">{confirmingOrder ? 'جاري التحقق...' : 'التحقق وإعادة المحاولة'}</button></div></div>}
       {/* Thermal receipt print-only view */}
       {receiptOrder && (
         <div className="hidden print:block print-area font-mono text-black bg-white" dir="rtl">

@@ -10,6 +10,7 @@ export interface LocalItem {
   name: string;
   barcode?: string | null;
   stock?: { quantity: number; minimum: number; unit: string } | null;
+  tracksInventory?: boolean;
   price: number;
   categoryId: string;
 }

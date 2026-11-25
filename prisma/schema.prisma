@@ -264,7 +264,7 @@ model SalesOrderItem {
   order        SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   itemId       String
   item         Item     @relation(fields: [itemId], references: [id])
-  qty          Int
+  qty          Float
   unitPrice    Float
   totalPrice   Float
   comment      String?
@@ -305,7 +305,7 @@ model OrderReturnItem {
   orderReturn OrderReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
   itemId      String
   item        Item        @relation(fields: [itemId], references: [id])
-  quantity    Int
+  quantity    Float
   refundPrice Float
 }
 

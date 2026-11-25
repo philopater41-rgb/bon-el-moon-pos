@@ -68,7 +68,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      categories: categories.map(category => ({ ...category, items: category.items.map(item => { const tracked = item.recipe.find(recipe => recipe.rawMaterial.name.endsWith(itemStockMarker(item.id)))?.rawMaterial; return { id: item.id, name: item.name, price: item.price, barcode: barcodeMap?.get(item.id) || null, stock: tracked ? { quantity: tracked.stockQty, minimum: tracked.minStockLevel, unit: tracked.deductUnit } : null }; }) })),
+      categories: categories.map(category => ({ ...category, items: category.items.map(item => { const tracked = item.recipe.find(recipe => recipe.rawMaterial.name.endsWith(itemStockMarker(item.id)))?.rawMaterial; return { id: item.id, name: item.name, price: item.price, barcode: barcodeMap?.get(item.id) || null, tracksInventory: item.recipe.length > 0, stock: tracked ? { quantity: tracked.stockQty, minimum: tracked.minStockLevel, unit: tracked.deductUnit } : null }; }) })),
       modifiers,
       halls,
       customers,

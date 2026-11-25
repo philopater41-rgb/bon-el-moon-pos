@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { itemStockMarker } from '@/lib/item-stock';
 
 interface SyncOrderItemModifier {
   modifierId: string;
@@ -131,7 +132,9 @@ export async function POST(request: Request) {
             const validItemId = item.itemId;
             const itemExists = await tx.item.findUnique({ where: { id: validItemId } });
             if (!itemExists) throw new Error('صنف الطلب غير موجود');
-            if (!Number.isInteger(item.qty) || item.qty <= 0) throw new Error('كمية الصنف غير صالحة');
+            const tracked = await tx.recipe.findFirst({ where: { itemId: validItemId, rawMaterial: { name: { endsWith: itemStockMarker(validItemId) } } }, include: { rawMaterial: true } });
+            const weighted = tracked && ['kg', 'g'].includes(tracked.rawMaterial.deductUnit);
+            if (!Number.isFinite(item.qty) || item.qty <= 0 || (!weighted && !Number.isInteger(item.qty)) || (weighted && Math.abs(item.qty * 1000 - Math.round(item.qty * 1000)) > 1e-7)) throw new Error('كمية الصنف غير صالحة');
 
             const validModifiers = [];
             for (const mod of item.modifiers || []) {
@@ -197,14 +200,9 @@ export async function POST(request: Request) {
 
               for (const ing of recipeIngredients) {
                 const totalDeduct = ing.quantity * item.qty;
-                await tx.rawMaterial.update({
-                  where: { id: ing.rawMaterialId },
-                  data: {
-                    stockQty: {
-                      decrement: totalDeduct,
-                    },
-                  },
-                });
+                const material = await tx.rawMaterial.findUniqueOrThrow({ where: { id: ing.rawMaterialId } });
+                const result = await tx.rawMaterial.updateMany({ where: { id: ing.rawMaterialId, stockQty: { gte: totalDeduct } }, data: { stockQty: { decrement: totalDeduct } } });
+                if (!result.count) throw new Error(`المخزون غير كافٍ للصنف أو الخامة: ${material.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}؛ المتاح ${material.stockQty} ${material.deductUnit}`);
               }
 
               // Deduct recipes for any modifiers
@@ -216,14 +214,8 @@ export async function POST(request: Request) {
 
                   for (const ing of modIngredients) {
                     const totalDeduct = ing.quantity * item.qty; // Deducted per item quantity
-                    await tx.rawMaterial.update({
-                      where: { id: ing.rawMaterialId },
-                      data: {
-                        stockQty: {
-                          decrement: totalDeduct,
-                        },
-                      },
-                    });
+                    const changed = await tx.rawMaterial.updateMany({ where: { id: ing.rawMaterialId, stockQty: { gte: totalDeduct } }, data: { stockQty: { decrement: totalDeduct } } });
+                    if (!changed.count) { const material = await tx.rawMaterial.findUniqueOrThrow({ where: { id: ing.rawMaterialId } }); throw new Error(`المخزون غير كافٍ للإضافة: ${material.name}؛ المتاح ${material.stockQty} ${material.deductUnit}`); }
                   }
                 }
               }
