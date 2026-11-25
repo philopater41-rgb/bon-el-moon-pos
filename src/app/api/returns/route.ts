@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { itemStockMarker } from '@/lib/item-stock';
+import { findLegacyWeight } from '@/lib/legacy-weight';
 
 // GET: Fetch all order returns
 export async function GET(request: Request) {
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
         const qty = Number(it.quantity);
         if (!it.itemId || !Number.isFinite(qty) || qty <= 0 || Math.abs(qty * 1000 - Math.round(qty * 1000)) > 1e-7 || !Number.isFinite(Number(it.refundPrice)) || Number(it.refundPrice) < 0) throw new Error('بيانات صنف المرتجع غير صالحة');
         const tracked = await tx.recipe.findFirst({ where: { itemId: it.itemId, rawMaterial: { name: { endsWith: itemStockMarker(it.itemId) } } }, include: { rawMaterial: true } });
-        if ((!tracked || !['kg', 'g'].includes(tracked.rawMaterial.deductUnit)) && !Number.isInteger(qty)) throw new Error('كمية القطع المرتجعة يجب أن تكون عددًا صحيحًا');
+        if ((!tracked || !['kg', 'g'].includes(tracked.rawMaterial.deductUnit)) && !(await findLegacyWeight(tx, it.itemId, true)) && !Number.isInteger(qty)) throw new Error('كمية القطع المرتجعة يجب أن تكون عددًا صحيحًا');
         requested.set(it.itemId, (requested.get(it.itemId) || 0) + qty);
       }
       for (const [itemId, qty] of requested) {
@@ -120,6 +121,8 @@ export async function POST(request: Request) {
         for (const [itemId, qty] of requested) {
           const ingredients = await tx.recipe.findMany({ where: { itemId } });
           for (const ing of ingredients) await tx.rawMaterial.update({ where: { id: ing.rawMaterialId }, data: { stockQty: { increment: ing.quantity * qty } } });
+          const legacy = await findLegacyWeight(tx, itemId, true);
+          if (legacy) await tx.rawMaterial.update({ where: { id: legacy.id }, data: { stockQty: { increment: qty * 1000 } } });
           // Item-level returns cannot identify which modifier was returned when
           // identical products have different modifiers. Avoid inventing stock.
         }

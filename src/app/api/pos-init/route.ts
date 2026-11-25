@@ -22,6 +22,9 @@ export async function GET() {
     });
 
     const barcodeMap = await getBarcodes();
+    const allItems = categories.flatMap(category => category.items);
+    const legacyMaterials = await prisma.rawMaterial.findMany({ where: { isActive: true, purchaseUnit: 'kg', deductUnit: 'g', conversionFactor: 1000, name: { in: allItems.map(item => item.name) } } });
+    const legacyWeight = (item: typeof allItems[number]) => item.recipe.length === 0 && allItems.filter(candidate => candidate.name === item.name).length === 1 ? legacyMaterials.filter(material => material.name === item.name) : [];
 
     // 2. Fetch modifiers
     const modifiers = await prisma.modifier.findMany({
@@ -68,7 +71,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      categories: categories.map(category => ({ ...category, items: category.items.map(item => { const tracked = item.recipe.find(recipe => recipe.rawMaterial.name.endsWith(itemStockMarker(item.id)))?.rawMaterial; return { id: item.id, name: item.name, price: item.price, barcode: barcodeMap?.get(item.id) || null, tracksInventory: item.recipe.length > 0, stock: tracked ? { quantity: tracked.stockQty, minimum: tracked.minStockLevel, unit: tracked.deductUnit } : null }; }) })),
+      categories: categories.map(category => ({ ...category, items: category.items.map(item => { const tracked = item.recipe.find(recipe => recipe.rawMaterial.name.endsWith(itemStockMarker(item.id)))?.rawMaterial; const matches = legacyWeight(item); const legacy = matches.length === 1 ? matches[0] : null; return { id: item.id, name: item.name, price: item.price, barcode: barcodeMap?.get(item.id) || null, tracksInventory: item.recipe.length > 0 || Boolean(legacy), stock: tracked ? { quantity: tracked.stockQty, minimum: tracked.minStockLevel, unit: tracked.deductUnit } : legacy ? { quantity: legacy.stockQty / 1000, minimum: legacy.minStockLevel / 1000, unit: 'kg' } : null }; }) })),
       modifiers,
       halls,
       customers,

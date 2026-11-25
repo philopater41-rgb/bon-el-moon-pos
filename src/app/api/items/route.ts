@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getBarcodes } from '@/lib/barcodes';
 import { itemStockMarker, parseStock } from '@/lib/item-stock';
+import { findLegacyWeight } from '@/lib/legacy-weight';
 
 // GET: Fetch all active items with recipes and categories
 export async function GET() {
@@ -147,6 +148,8 @@ export async function PUT(request: Request) {
       if (existingBarcode && existingBarcode.itemId !== id) return NextResponse.json({ error: `الباركود مستخدم بالفعل للصنف: ${existingBarcode.item.name}` }, { status: 409 });
     }
     const updatedItem = await prisma.$transaction(async (tx) => {
+      const legacyWeight = await findLegacyWeight(tx, id);
+      if (legacyWeight && (itemName !== legacyWeight.name || (Array.isArray(recipe) && recipe.some(r => r.rawMaterialId && Number(r.quantity) > 0)))) throw new Error('لا يمكن تغيير اسم الصنف أو إضافة وصفة لأنه مرتبط بخامة وزن في المخزون.');
       const previousRecipe = await tx.recipe.findMany({ where: { itemId: id }, include: { rawMaterial: true } });
       const stockRecipe = previousRecipe.find(r => r.rawMaterial.name.endsWith(itemStockMarker(id)));
       const otherIngredients = Array.isArray(recipe) ? recipe.filter(r => r.rawMaterialId && Number(r.quantity) > 0) : previousRecipe.filter(r => r.id !== stockRecipe?.id);

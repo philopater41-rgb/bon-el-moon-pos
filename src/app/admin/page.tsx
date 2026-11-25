@@ -87,10 +87,12 @@ interface PaymentBreakdown {
   cashOut: number;
 }
 
+const usesKgStock = (mat: { purchaseUnit: string; deductUnit: string; conversionFactor: number } | null | undefined) => Boolean(mat && mat.purchaseUnit === 'kg' && mat.deductUnit === 'g' && mat.conversionFactor === 1000);
+
 interface ProductCostItem {
   id: string;
   barcode?: string | null;
-  stock?: { quantity: number; unit: 'unit' | 'kg' | 'g'; minimum: number; materialId: string } | null;
+  stock?: { quantity: number; unit: 'unit' | 'kg' | 'g'; minimum: number; materialId: string; legacy?: boolean } | null;
   name: string;
   categoryId?: string;
   categoryName: string;
@@ -741,8 +743,8 @@ export default function AdminPage() {
           purchaseUnit: newMatPurchaseUnit.trim(),
           deductUnit: newMatDeductUnit.trim(),
           conversionFactor: parseFloat(newMatConversion) || 1000,
-          stockQty: parseFloat(newMatStockQty) || 0,
-          minStockLevel: parseFloat(newMatMinStock) || 0,
+          stockQty: (parseFloat(newMatStockQty) || 0) * (newMatPurchaseUnit.trim() === 'kg' && newMatDeductUnit.trim() === 'g' && Number(newMatConversion) === 1000 ? 1000 : 1),
+          minStockLevel: (parseFloat(newMatMinStock) || 0) * (newMatPurchaseUnit.trim() === 'kg' && newMatDeductUnit.trim() === 'g' && Number(newMatConversion) === 1000 ? 1000 : 1),
           costPerPurchaseUnit: parseFloat(newMatCost) || 0,
         }),
       });
@@ -768,8 +770,8 @@ export default function AdminPage() {
     setEditMatPurchaseUnit(mat.purchaseUnit || 'kg');
     setEditMatDeductUnit(mat.deductUnit || 'g');
     setEditMatConversion(mat.conversionFactor !== undefined ? mat.conversionFactor.toString() : '1000');
-    setEditMatStockQty(mat.stockQty !== undefined ? mat.stockQty.toString() : '0');
-    setEditMatMinStock(mat.minStockLevel !== undefined ? mat.minStockLevel.toString() : '0');
+    setEditMatStockQty(mat.stockQty !== undefined ? String(mat.stockQty / (usesKgStock(mat) ? 1000 : 1)) : '0');
+    setEditMatMinStock(mat.minStockLevel !== undefined ? String(mat.minStockLevel / (usesKgStock(mat) ? 1000 : 1)) : '0');
     setEditMatCost(mat.costPerPurchaseUnit !== undefined ? mat.costPerPurchaseUnit.toString() : '0');
     setShowEditMaterialModal(true);
   };
@@ -787,8 +789,8 @@ export default function AdminPage() {
           purchaseUnit: editMatPurchaseUnit.trim(),
           deductUnit: editMatDeductUnit.trim(),
           conversionFactor: parseFloat(editMatConversion) || 1,
-          stockQty: parseFloat(editMatStockQty) || 0,
-          minStockLevel: parseFloat(editMatMinStock) || 0,
+          ...((parseFloat(editMatStockQty) || 0) * (usesKgStock(selectedMaterialToEdit) ? 1000 : 1) !== selectedMaterialToEdit.stockQty ? { stockQty: (parseFloat(editMatStockQty) || 0) * (usesKgStock(selectedMaterialToEdit) ? 1000 : 1), expectedStockQty: selectedMaterialToEdit.stockQty } : {}),
+          minStockLevel: (parseFloat(editMatMinStock) || 0) * (usesKgStock(selectedMaterialToEdit) ? 1000 : 1),
           costPerPurchaseUnit: parseFloat(editMatCost) || 0,
         }),
       });
@@ -1376,7 +1378,7 @@ export default function AdminPage() {
 
               <div className="w-full text-right rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-200">
                 <button type="button" onClick={() => setActiveTab('inventory')} className="text-right font-bold">تنبيه النواقص: {loadingInventory ? 'جاري التحميل...' : `${rawMaterials.filter(mat => (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel)).length} أصناف وخامات`} — عرض المخزون</button>
-                {!loadingInventory && rawMaterials.filter(mat => (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel)).length === 0 ? <p className="text-xs mt-2">لا توجد أصناف أو خامات تحت حد التنبيه.</p> : <ul className="grid gap-1 mt-2 text-xs sm:grid-cols-2 lg:grid-cols-3">{rawMaterials.filter(mat => (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel)).sort((a, b) => a.name.localeCompare(b.name, 'ar')).map(mat => <li key={mat.id} className="rounded-lg bg-black/20 p-2"><span>{mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}</span><span className="block mt-1">المتاح: {mat.stockQty} {({ unit: 'قطعة', kg: 'كجم', g: 'جرام' } as Record<string, string>)[mat.deductUnit] || mat.deductUnit} — حد التنبيه: {mat.minStockLevel}</span></li>)}</ul>}
+                {!loadingInventory && rawMaterials.filter(mat => (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel)).length === 0 ? <p className="text-xs mt-2">لا توجد أصناف أو خامات تحت حد التنبيه.</p> : <ul className="grid gap-1 mt-2 text-xs sm:grid-cols-2 lg:grid-cols-3">{rawMaterials.filter(mat => (mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel)).sort((a, b) => a.name.localeCompare(b.name, 'ar')).map(mat => <li key={mat.id} className="rounded-lg bg-black/20 p-2"><span>{mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}</span><span className="block mt-1">المتاح: {usesKgStock(mat) ? mat.stockQty / 1000 : mat.stockQty} {usesKgStock(mat) ? 'كجم' : ({ unit: 'قطعة', kg: 'كجم', g: 'جرام' } as Record<string, string>)[mat.deductUnit] || mat.deductUnit} — حد التنبيه: {mat.minStockLevel}</span></li>)}</ul>}
               </div>
               {/* Top Financial KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2551,8 +2553,8 @@ export default function AdminPage() {
                         rawMaterials.filter(mat => { const related = productCosts.filter(item => item.stock?.materialId === mat.id || item.ingredients.some(ingredient => ingredient.rawMaterialId === mat.id)); const matchesCategory = !inventoryCategory || (inventoryCategory === '__unlinked' ? related.length === 0 : related.some(item => item.categoryName === inventoryCategory)); return matchesCategory && mat.name.toLocaleLowerCase('ar').includes(inventorySearch.trim().toLocaleLowerCase('ar')); }).sort((a,b) => { const category = (id: string) => productCosts.find(item => item.stock?.materialId === id || item.ingredients.some(ingredient => ingredient.rawMaterialId === id))?.categoryName || 'خامات غير مربوطة بقسم'; return category(a.id).localeCompare(category(b.id), 'ar') || a.name.localeCompare(b.name, 'ar'); }).map((mat) => (
                           <tr key={mat.id} className="hover:bg-white/5">
                             <td className="p-3 font-semibold text-white">{mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}</td>
-                            <td className="p-3 font-mono font-bold text-cyan-400">{mat.stockQty} {mat.deductUnit}</td>
-                            <td className="p-3 text-gray-400">{mat.minStockLevel} {mat.deductUnit}</td>
+                            <td className="p-3 font-mono font-bold text-cyan-400">{usesKgStock(mat) ? mat.stockQty / 1000 : mat.stockQty} {usesKgStock(mat) ? 'كجم' : mat.deductUnit}</td>
+                            <td className="p-3 text-gray-400">{usesKgStock(mat) ? mat.minStockLevel / 1000 : mat.minStockLevel} {usesKgStock(mat) ? 'كجم' : mat.deductUnit}</td>
                             <td className="p-3 font-mono text-amber-300">EGP {mat.costPerPurchaseUnit?.toFixed(2) || '0.00'} / {mat.purchaseUnit}</td>
                             <td className="p-3">
                               <span className={`px-2 py-0.5 rounded text-[10px] ${(mat.stockQty <= 0 || mat.stockQty < mat.minStockLevel) ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
@@ -3197,26 +3199,26 @@ export default function AdminPage() {
               {/* Stock & Cost Row */}
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs text-gray-300 mb-1">الرصيد الافتتاحي</label>
+                  <label className="block text-xs text-gray-300 mb-1">الرصيد الافتتاحي ({newMatPurchaseUnit.trim() === 'kg' && newMatDeductUnit.trim() === 'g' && Number(newMatConversion) === 1000 ? 'كجم' : newMatDeductUnit})</label>
                   <input
                     type="number"
                     step="any"
                     min="0"
                     value={newMatStockQty}
                     onChange={(e) => setNewMatStockQty(e.target.value)}
-                    placeholder={`0 (${newMatDeductUnit})`}
+                    placeholder={`0 (${newMatPurchaseUnit.trim() === 'kg' && newMatDeductUnit.trim() === 'g' && Number(newMatConversion) === 1000 ? 'كجم' : newMatDeductUnit})`}
                     className="w-full bg-slate-900 border border-white/10 rounded-xl p-2 text-xs text-white text-right placeholder-gray-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-300 mb-1">حد تنبيه النواقص</label>
+                  <label className="block text-xs text-gray-300 mb-1">حد تنبيه النواقص ({newMatPurchaseUnit.trim() === 'kg' && newMatDeductUnit.trim() === 'g' && Number(newMatConversion) === 1000 ? 'كجم' : newMatDeductUnit})</label>
                   <input
                     type="number"
                     step="any"
                     min="0"
                     value={newMatMinStock}
                     onChange={(e) => setNewMatMinStock(e.target.value)}
-                    placeholder={`0 (${newMatDeductUnit})`}
+                    placeholder={`0 (${newMatPurchaseUnit.trim() === 'kg' && newMatDeductUnit.trim() === 'g' && Number(newMatConversion) === 1000 ? 'كجم' : newMatDeductUnit})`}
                     className="w-full bg-slate-900 border border-white/10 rounded-xl p-2 text-xs text-white text-right placeholder-gray-500"
                   />
                 </div>
@@ -3265,6 +3267,7 @@ export default function AdminPage() {
                   required
                   type="text"
                   value={editMatName}
+                  disabled={productCosts.some(item => item.stock?.legacy && item.stock.materialId === selectedMaterialToEdit?.id)}
                   onChange={(e) => setEditMatName(e.target.value)}
                   className="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-xs text-white text-right focus:border-cyan-500"
                 />
@@ -3278,6 +3281,7 @@ export default function AdminPage() {
                     required
                     type="text"
                     value={editMatPurchaseUnit}
+                    disabled={usesKgStock(selectedMaterialToEdit)}
                     onChange={(e) => setEditMatPurchaseUnit(e.target.value)}
                     className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white text-right"
                   />
@@ -3288,6 +3292,7 @@ export default function AdminPage() {
                     required
                     type="text"
                     value={editMatDeductUnit}
+                    disabled={usesKgStock(selectedMaterialToEdit)}
                     onChange={(e) => setEditMatDeductUnit(e.target.value)}
                     className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white text-right"
                   />
@@ -3300,6 +3305,7 @@ export default function AdminPage() {
                     step="any"
                     min="0.001"
                     value={editMatConversion}
+                    disabled={usesKgStock(selectedMaterialToEdit)}
                     onChange={(e) => setEditMatConversion(e.target.value)}
                     className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white text-right"
                   />
@@ -3312,7 +3318,7 @@ export default function AdminPage() {
               {/* Stock & Cost Row */}
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs text-gray-300 mb-1">الرصيد بالمخزن ({editMatDeductUnit})</label>
+                  <label className="block text-xs text-gray-300 mb-1">الرصيد بالمخزن ({usesKgStock(selectedMaterialToEdit) ? 'كجم' : editMatDeductUnit})</label>
                   <input
                     type="number"
                     step="any"
@@ -3323,7 +3329,7 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-300 mb-1">حد التنبيه ({editMatDeductUnit})</label>
+                  <label className="block text-xs text-gray-300 mb-1">حد التنبيه ({usesKgStock(selectedMaterialToEdit) ? 'كجم' : editMatDeductUnit})</label>
                   <input
                     type="number"
                     step="any"
@@ -3734,6 +3740,7 @@ export default function AdminPage() {
                       required
                       type="text"
                       value={editItemName}
+                      disabled={Boolean(selectedItemToEdit?.stock?.legacy)}
                       onChange={(e) => setEditItemName(e.target.value)}
                       className="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-xs text-white text-right focus:border-cyan-500 font-semibold"
                     />
@@ -3760,11 +3767,11 @@ export default function AdminPage() {
 
                 <div className="rounded-xl border border-amber-500/30 bg-slate-900/60 p-3 space-y-2">
                   <p className="text-sm font-bold text-amber-300">رصيد الصنف (اختياري)</p>
-                  <p className="text-xs text-gray-300">اترك الكمية فارغة لو الرصيد غير معروف. عند تسجيله، بيع كل وحدة يخصم 1 من نفس الوحدة. لا تستخدمه مع وصفة خامات. لو الصنف له خامة مسجلة بالفعل، اربطها بالوصفة بدلاً من تكرار الرصيد.</p>
+                  <p className="text-xs text-gray-300">{selectedItemToEdit?.stock?.legacy ? "الرصيد مرتبط بخامة موجودة؛ عدّله من شاشة المخزون. الاسم ثابت للحفاظ على الربط." : "اترك الكمية فارغة لو الرصيد غير معروف. بيع كل وحدة يخصم 1 من نفس الوحدة. لا تستخدمه مع وصفة خامات."}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <label className="text-xs text-gray-300">الكمية المتاحة<input aria-label="الكمية المتاحة" type="number" min="0" step={editStockUnit === 'unit' ? '1' : 'any'} value={editStockQty} onChange={e => setEditStockQty(e.target.value)} placeholder="غير مسجل" className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white" /></label>
+                    <label className="text-xs text-gray-300">الكمية المتاحة<input aria-label="الكمية المتاحة" type="number" min="0" disabled={Boolean(selectedItemToEdit?.stock?.legacy)} step={editStockUnit === 'unit' ? '1' : 'any'} value={editStockQty} onChange={e => setEditStockQty(e.target.value)} placeholder="غير مسجل" className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white" /></label>
                     <label className="text-xs text-gray-300">الوحدة<select aria-label="وحدة المخزون" value={editStockUnit} onChange={e => setEditStockUnit(e.target.value as 'unit' | 'kg' | 'g')} disabled={Boolean(selectedItemToEdit?.stock)} className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white"><option value="unit">قطعة</option><option value="kg">كيلوجرام</option><option value="g">جرام</option></select></label>
-                    <label className="text-xs text-gray-300">حد تنبيه النواقص<input aria-label="حد تنبيه النواقص" type="number" min="0" step={editStockUnit === 'unit' ? '1' : 'any'} value={editStockMin} onChange={e => setEditStockMin(e.target.value)} className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white" /></label>
+                    <label className="text-xs text-gray-300">حد تنبيه النواقص<input aria-label="حد تنبيه النواقص" type="number" min="0" disabled={Boolean(selectedItemToEdit?.stock?.legacy)} step={editStockUnit === 'unit' ? '1' : 'any'} value={editStockMin} onChange={e => setEditStockMin(e.target.value)} className="mt-1 w-full rounded-lg bg-slate-950 border border-white/10 p-2 text-white" /></label>
                   </div>
                 </div>
 

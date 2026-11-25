@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { findLegacyWeight } from '@/lib/legacy-weight';
 
 export async function GET() {
   try {
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const { rawMaterialId, id, name, stockQty, minStockLevel, purchaseUnit, deductUnit, conversionFactor, costPerPurchaseUnit } = await request.json();
+    const { rawMaterialId, id, name, stockQty, minStockLevel, purchaseUnit, deductUnit, conversionFactor, costPerPurchaseUnit, expectedStockQty } = await request.json();
     const targetId = rawMaterialId || id;
     if (!targetId) {
       return NextResponse.json({ error: 'الخامة مطلوبة.' }, { status: 400 });
@@ -82,10 +83,21 @@ export async function PATCH(request: Request) {
     if (!Object.keys(data).length || Object.values(data).some((value) => typeof value === 'number' && (!Number.isFinite(value) || value < 0))) {
       return NextResponse.json({ error: 'راجع بيانات الخامة وتأكد أن الأرقام صحيحة.' }, { status: 400 });
     }
-    const rawMaterial = await prisma.rawMaterial.update({
-      where: { id: targetId },
-      data,
-    });
+    const original = await prisma.rawMaterial.findUnique({ where: { id: targetId } });
+    if (original && (data.name !== undefined || data.purchaseUnit !== undefined || data.deductUnit !== undefined || data.conversionFactor !== undefined)) {
+      const related = await prisma.item.findMany({ where: { name: original.name, isActive: true }, select: { id: true }, take: 2 });
+      const legacy = related.length === 1 ? await findLegacyWeight(prisma, related[0].id) : null;
+      if (legacy?.id === targetId && ((data.name !== undefined && data.name !== original.name) || (data.purchaseUnit !== undefined && data.purchaseUnit !== original.purchaseUnit) || (data.deductUnit !== undefined && data.deductUnit !== original.deductUnit) || (data.conversionFactor !== undefined && data.conversionFactor !== original.conversionFactor))) return NextResponse.json({ error: 'لا يمكن تغيير اسم أو وحدات خامة مرتبطة بصنف يباع بالكيلو.' }, { status: 409 });
+    }
+    if (expectedStockQty !== undefined && stockQty !== undefined) {
+      const expected = Number(expectedStockQty);
+      if (!Number.isFinite(expected) || expected < 0) return NextResponse.json({ error: 'الرصيد السابق غير صالح.' }, { status: 400 });
+      const changed = await prisma.rawMaterial.updateMany({ where: { id: targetId, stockQty: expected }, data });
+      if (!changed.count) return NextResponse.json({ error: 'تغير رصيد الخامة أثناء التعديل؛ حدّث البيانات وحاول مرة أخرى.' }, { status: 409 });
+      const rawMaterial = await prisma.rawMaterial.findUniqueOrThrow({ where: { id: targetId } });
+      return NextResponse.json({ rawMaterial });
+    }
+    const rawMaterial = await prisma.rawMaterial.update({ where: { id: targetId }, data });
     return NextResponse.json({ rawMaterial });
   } catch (error) {
     console.error('Update raw material error:', error);
@@ -116,7 +128,9 @@ export async function DELETE(request: Request) {
         tx.recipe.count({ where: { rawMaterialId } }),
         tx.recipeModifier.count({ where: { rawMaterialId } }),
       ]);
-      if (recipeCount || modifierCount) return 'in-use';
+      const related = await tx.item.findMany({ where: { name: material.name }, select: { id: true }, take: 2 });
+      const linked = related.length === 1 ? await findLegacyWeight(tx, related[0].id, true) : null;
+      if (recipeCount || modifierCount || linked?.id === rawMaterialId) return 'in-use';
       await tx.rawMaterial.update({ where: { id: rawMaterialId }, data: { isActive: false } });
       return 'hidden';
     });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { itemStockMarker } from '@/lib/item-stock';
+import { findLegacyWeight } from '@/lib/legacy-weight';
 
 interface SyncOrderItemModifier {
   modifierId: string;
@@ -133,7 +134,7 @@ export async function POST(request: Request) {
             const itemExists = await tx.item.findUnique({ where: { id: validItemId } });
             if (!itemExists) throw new Error('صنف الطلب غير موجود');
             const tracked = await tx.recipe.findFirst({ where: { itemId: validItemId, rawMaterial: { name: { endsWith: itemStockMarker(validItemId) } } }, include: { rawMaterial: true } });
-            const weighted = tracked && ['kg', 'g'].includes(tracked.rawMaterial.deductUnit);
+            const weighted = (tracked && ['kg', 'g'].includes(tracked.rawMaterial.deductUnit)) || Boolean(await findLegacyWeight(tx, validItemId));
             if (!Number.isFinite(item.qty) || item.qty <= 0 || (!weighted && !Number.isInteger(item.qty)) || (weighted && Math.abs(item.qty * 1000 - Math.round(item.qty * 1000)) > 1e-7)) throw new Error('كمية الصنف غير صالحة');
 
             const validModifiers = [];
@@ -203,6 +204,13 @@ export async function POST(request: Request) {
                 const material = await tx.rawMaterial.findUniqueOrThrow({ where: { id: ing.rawMaterialId } });
                 const result = await tx.rawMaterial.updateMany({ where: { id: ing.rawMaterialId, stockQty: { gte: totalDeduct } }, data: { stockQty: { decrement: totalDeduct } } });
                 if (!result.count) throw new Error(`المخزون غير كافٍ للصنف أو الخامة: ${material.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}؛ المتاح ${material.stockQty} ${material.deductUnit}`);
+              }
+
+              const legacy = await findLegacyWeight(tx, item.itemId);
+              if (legacy) {
+                const needed = item.qty * 1000;
+                const changed = await tx.rawMaterial.updateMany({ where: { id: legacy.id, stockQty: { gte: needed } }, data: { stockQty: { decrement: needed } } });
+                if (!changed.count) throw new Error(`المخزون غير كافٍ للصنف: ${legacy.name}؛ المتاح ${legacy.stockQty / 1000} كجم`);
               }
 
               // Deduct recipes for any modifiers

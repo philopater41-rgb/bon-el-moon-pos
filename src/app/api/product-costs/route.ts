@@ -18,6 +18,7 @@ export async function GET() {
       orderBy: { name: 'asc' },
     });
 
+    const legacyMaterials = await prisma.rawMaterial.findMany({ where: { isActive: true, purchaseUnit: 'kg', deductUnit: 'g', conversionFactor: 1000, name: { in: items.map(item => item.name) } } });
     const barcodeMap = await getBarcodes();
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -62,6 +63,8 @@ export async function GET() {
       const totalUnitCost = totalRecipeCost > 0 ? totalRecipeCost : (item.cost || 0);
 
       const tracked = item.recipe.find(r => r.rawMaterial.name.endsWith(itemStockMarker(item.id)))?.rawMaterial;
+      const matches = !item.recipe.length && items.filter(candidate => candidate.name === item.name).length === 1 ? legacyMaterials.filter(material => material.name === item.name) : [];
+      const legacy = matches.length === 1 ? matches[0] : null;
       const profitPerUnit = item.price - totalUnitCost;
       const profitMarginPct = item.price > 0 ? (profitPerUnit / item.price) * 100 : 0;
       const qtySoldToday = todaySoldMap.get(item.id) || 0;
@@ -73,7 +76,7 @@ export async function GET() {
         id: item.id,
         name: item.name,
         barcode: barcodeMap?.get(item.id) || null,
-        stock: tracked ? { quantity: tracked.stockQty, unit: tracked.deductUnit, minimum: tracked.minStockLevel, materialId: tracked.id } : null,
+        stock: tracked ? { quantity: tracked.stockQty, unit: tracked.deductUnit, minimum: tracked.minStockLevel, materialId: tracked.id } : legacy ? { quantity: legacy.stockQty / 1000, unit: 'kg', minimum: legacy.minStockLevel / 1000, materialId: legacy.id, legacy: true } : null,
         categoryId: item.categoryId,
         categoryName: item.category?.name || 'عام',
         price: item.price,
