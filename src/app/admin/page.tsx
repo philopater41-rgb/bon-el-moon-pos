@@ -239,6 +239,8 @@ export default function AdminPage() {
 
   // 6. Inventory & Wastage State
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryCategory, setInventoryCategory] = useState('');
   const [wastageLogs, setWastageLogs] = useState<WastageSummary[]>([]);
   const [showAddWastageModal, setShowAddWastageModal] = useState(false);
   const [wastageMatId, setWastageMatId] = useState('');
@@ -485,7 +487,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     return scheduleEffect(() => {
-      if (activeTab === 'profitability') { void fetchProductCosts(); void fetchInventory(); }
+      if (activeTab === 'profitability' || activeTab === 'inventory') { void fetchProductCosts(); void fetchInventory(); }
       if (activeTab === 'reports') void fetchDetailedReport();
     });
   }, [activeTab, fetchProductCosts, fetchDetailedReport, fetchInventory]);
@@ -1372,6 +1374,10 @@ export default function AdminPage() {
                 </div>
               )}
 
+              <button type="button" onClick={() => setActiveTab('inventory')} className="w-full text-right rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-amber-200">
+                <strong>تنبيه النواقص: {loadingInventory ? 'جاري التحميل...' : `${rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).length} أصناف وخامات`}</strong>
+                <span className="block text-xs mt-1">{rawMaterials.filter(mat => mat.stockQty < mat.minStockLevel).map(mat => mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')).slice(0, 5).join('، ') || 'اضغط لعرض المخزون وحدود التنبيه'}</span>
+              </button>
               {/* Top Financial KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="glass-panel p-4 rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-950/20 to-transparent">
@@ -2406,7 +2412,7 @@ export default function AdminPage() {
                   <h4 className="font-bold text-sm text-amber-300">استيراد أصناف من Excel</h4>
                   {barcodeAvailable === false && <p className="rounded-lg border border-amber-500/40 p-2 text-xs text-amber-200">تسجيل الباركود يتطلب تجهيز قاعدة البيانات أولاً. تقدر تستورد أصناف بدون باركود لحين التجهيز.</p>}
                   <a href="/api/items/import" className="inline-block text-xs text-amber-300 underline">تحميل نموذج Excel فارغ</a>
-                  <p className="text-xs text-gray-300">ملف xlsx: الصف الأول يحتوي اسم المنتج، القسم، سعر البيع، ويمكن إضافة التكلفة والباركود. احفظ الباركود كنص للحفاظ على الأصفار في بدايته. الاستيراد يضيف أصنافًا جديدة فقط.</p>
+                  <p className="text-xs text-gray-300">ملف xlsx: الصف الأول يحتوي اسم المنتج، القسم، سعر البيع، ويمكن إضافة التكلفة والباركود والكمية والوحدة وحد النواقص. احفظ الباركود كنص للحفاظ على الأصفار في بدايته. الاستيراد يضيف أصنافًا جديدة فقط.</p>
                   <div className="flex flex-wrap items-center gap-3">
                     <input type="file" accept=".xlsx" aria-label="اختيار ملف Excel" className="text-xs text-gray-200" onChange={e => { setImportFile(e.target.files?.[0] || null); setImportPreview(null); }} />
                     <button type="button" disabled={!importFile || importBusy} onClick={() => void handleImportItems(false)} className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">معاينة الملف</button>
@@ -2515,6 +2521,7 @@ export default function AdminPage() {
               {/* Raw Materials Table */}
               <div className="glass-panel p-5 rounded-2xl border border-white/5 space-y-3">
                 <h4 className="text-xs font-bold text-white">أرصدة الخامات الحالية</h4>
+                <div className="flex flex-wrap gap-2"><input aria-label="بحث في المخزون" value={inventorySearch} onChange={e => setInventorySearch(e.target.value)} placeholder="ابحث في المخزون" className="rounded-lg bg-slate-950 border border-white/10 p-2 text-sm" /><select aria-label="قسم المخزون" value={inventoryCategory} onChange={e => setInventoryCategory(e.target.value)} className="rounded-lg bg-slate-950 border border-white/10 p-2 text-sm"><option value="">كل الأقسام</option>{Array.from(new Set(productCosts.map(item => item.categoryName))).sort((a,b) => a.localeCompare(b,'ar')).map(category => <option key={category} value={category}>{category}</option>)}<option value="__unlinked">خامات غير مربوطة بقسم</option></select></div>
                 <div className="overflow-x-auto rounded-xl border border-white/5">
                   <table className="w-full text-right text-xs">
                     <thead className="bg-slate-900/80 text-gray-400 border-b border-white/5">
@@ -2541,7 +2548,7 @@ export default function AdminPage() {
                           </td>
                         </tr>
                       ) : (
-                        rawMaterials.map((mat) => (
+                        rawMaterials.filter(mat => { const related = productCosts.filter(item => item.stock?.materialId === mat.id || item.ingredients.some(ingredient => ingredient.rawMaterialId === mat.id)); const matchesCategory = !inventoryCategory || (inventoryCategory === '__unlinked' ? related.length === 0 : related.some(item => item.categoryName === inventoryCategory)); return matchesCategory && mat.name.toLocaleLowerCase('ar').includes(inventorySearch.trim().toLocaleLowerCase('ar')); }).sort((a,b) => { const category = (id: string) => productCosts.find(item => item.stock?.materialId === id || item.ingredients.some(ingredient => ingredient.rawMaterialId === id))?.categoryName || 'خامات غير مربوطة بقسم'; return category(a.id).localeCompare(category(b.id), 'ar') || a.name.localeCompare(b.name, 'ar'); }).map((mat) => (
                           <tr key={mat.id} className="hover:bg-white/5">
                             <td className="p-3 font-semibold text-white">{mat.name.replace(/\s*\[product-stock:[^\]]+\]$/, '')}</td>
                             <td className="p-3 font-mono font-bold text-cyan-400">{mat.stockQty} {mat.deductUnit}</td>

@@ -48,6 +48,10 @@ export async function POST(request: Request) {
     if (stockInput && Array.isArray(recipe) && recipe.some(r => r.rawMaterialId && Number(r.quantity) > 0)) return NextResponse.json({ error: 'تتبع رصيد الصنف لا يجتمع مع وصفة خامات؛ استخدم أحدهما.' }, { status: 400 });
     const normalizedBarcode = typeof barcode === 'string' ? barcode.trim() : '';
     if (normalizedBarcode && !(await getBarcodes())) return NextResponse.json({ error: 'يلزم تجهيز قاعدة البيانات لدعم الباركود أولاً.' }, { status: 503 });
+    if (normalizedBarcode) {
+      const existingBarcode = await prisma.itemBarcode.findUnique({ where: { barcode: normalizedBarcode }, include: { item: true } });
+      if (existingBarcode) return NextResponse.json({ error: `الباركود مستخدم بالفعل للصنف: ${existingBarcode.item.name}` }, { status: 409 });
+    }
     const itemWithRecipe = await prisma.$transaction(async (tx) => {
       const category = await tx.category.upsert({
         where: { name: normalizedCategoryName },
@@ -138,6 +142,10 @@ export async function PUT(request: Request) {
     const barcodeMap = barcode !== undefined ? await getBarcodes() : null;
     const normalizedBarcode = typeof barcode === 'string' ? barcode.trim() : '';
     if (normalizedBarcode && !barcodeMap) return NextResponse.json({ error: 'يلزم تجهيز قاعدة البيانات لدعم الباركود أولاً.' }, { status: 503 });
+    if (normalizedBarcode) {
+      const existingBarcode = await prisma.itemBarcode.findUnique({ where: { barcode: normalizedBarcode }, include: { item: true } });
+      if (existingBarcode && existingBarcode.itemId !== id) return NextResponse.json({ error: `الباركود مستخدم بالفعل للصنف: ${existingBarcode.item.name}` }, { status: 409 });
+    }
     const updatedItem = await prisma.$transaction(async (tx) => {
       const previousRecipe = await tx.recipe.findMany({ where: { itemId: id }, include: { rawMaterial: true } });
       const stockRecipe = previousRecipe.find(r => r.rawMaterial.name.endsWith(itemStockMarker(id)));

@@ -9,6 +9,7 @@ export interface LocalItem {
   id: string;
   name: string;
   barcode?: string | null;
+  stock?: { quantity: number; minimum: number; unit: string } | null;
   price: number;
   categoryId: string;
 }

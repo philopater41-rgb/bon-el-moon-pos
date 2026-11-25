@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getBarcodes } from '@/lib/barcodes';
+import { itemStockMarker } from '@/lib/item-stock';
 
 export async function GET() {
   try {
@@ -14,6 +15,7 @@ export async function GET() {
         items: {
           where: { isActive: true },
           orderBy: { name: 'asc' },
+          include: { recipe: { include: { rawMaterial: true } } },
         },
       },
       orderBy: { name: 'asc' },
@@ -66,7 +68,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      categories: categories.map(category => ({ ...category, items: category.items.map(item => ({ ...item, barcode: barcodeMap?.get(item.id) || null })) })),
+      categories: categories.map(category => ({ ...category, items: category.items.map(item => { const tracked = item.recipe.find(recipe => recipe.rawMaterial.name.endsWith(itemStockMarker(item.id)))?.rawMaterial; return { id: item.id, name: item.name, price: item.price, barcode: barcodeMap?.get(item.id) || null, stock: tracked ? { quantity: tracked.stockQty, minimum: tracked.minStockLevel, unit: tracked.deductUnit } : null }; }) })),
       modifiers,
       halls,
       customers,

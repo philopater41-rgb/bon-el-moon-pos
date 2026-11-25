@@ -38,7 +38,7 @@ const scheduleEffect = (work: () => void) => {
 };
 
 interface POSInitialization {
-  categories: Array<LocalCategory & { items: Array<Pick<LocalItem, 'id' | 'name' | 'price' | 'barcode'>> }>;
+  categories: Array<LocalCategory & { items: Array<Pick<LocalItem, 'id' | 'name' | 'price' | 'barcode' | 'stock'>> }>;
   modifiers: LocalModifier[];
   halls: Array<LocalHall & { tables: Array<Pick<LocalTable, 'id' | 'name' | 'status'>> }>;
   customers?: LocalCustomer[];
@@ -106,6 +106,8 @@ export default function POSPage() {
   const [categories, setCategories] = useState<LocalCategory[]>([]);
   const [items, setItems] = useState<LocalItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState('');
+  const [menuSearch, setMenuSearch] = useState('');
+  const draggedCategory = useRef<string | null>(null);
   const scannerHandler = useRef<(code: string) => void>(() => {});
   const [modifiers, setModifiers] = useState<LocalModifier[]>([]);
   const [halls, setHalls] = useState<LocalHall[]>([]);
@@ -302,7 +304,7 @@ export default function POSPage() {
           const allItems: LocalItem[] = [];
           data.categories.forEach((c) => {
             c.items.forEach((i) => {
-              allItems.push({ id: i.id, name: i.name, price: i.price, barcode: i.barcode, categoryId: c.id });
+              allItems.push({ id: i.id, name: i.name, price: i.price, barcode: i.barcode, stock: i.stock, categoryId: c.id });
             });
           });
           await offlineDB.items.bulkPut(allItems);
@@ -364,6 +366,8 @@ export default function POSPage() {
         return a.name.localeCompare(b.name, 'ar');
       });
 
+      const savedOrder: string[] = (() => { try { const value = JSON.parse(localStorage.getItem('bon_category_order') || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } })();
+      orderedCategories.sort((a, b) => { const ai = savedOrder.indexOf(a.id), bi = savedOrder.indexOf(b.id); return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi); });
       setCategories(orderedCategories);
       setItems(dbItems);
       setModifiers(dbMods);
@@ -416,7 +420,7 @@ export default function POSPage() {
     } catch (e) {
       console.error('Error loading cart:', e);
     }
-  }, []);
+  }, [setDiscountReason]);
 
   useEffect(() => {
     return scheduleEffect(() => {
@@ -1368,7 +1372,7 @@ export default function POSPage() {
 
             {/* Menu Items Grid */}
             <div className="flex-1 glass-panel rounded-xl p-4 flex flex-col gap-4 overflow-hidden">
-              <div className="flex gap-2 border-b border-white/5 pb-3 overflow-x-auto shrink-0 pl-1 justify-start">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 border-b border-white/5 pb-3 max-h-44 overflow-y-auto shrink-0">
                 {loadingPOS && categories.length === 0 ? (
                   <div className="flex items-center gap-2 py-1 px-3 text-xs text-cyan-300/80 animate-pulse">
                     <Database className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
@@ -1378,7 +1382,11 @@ export default function POSPage() {
                   categories.map((cat) => (
                     <button
                       key={cat.id}
-                      onClick={() => setSelectedCategoryId(cat.id)}
+                      draggable
+                      onDragStart={() => { draggedCategory.current = cat.id; }}
+                      onDragOver={event => event.preventDefault()}
+                      onDrop={event => { event.preventDefault(); const from = categories.findIndex(c => c.id === draggedCategory.current); const to = categories.findIndex(c => c.id === cat.id); if (from < 0 || to < 0 || from === to) return; const ordered = [...categories]; const [moved] = ordered.splice(from, 1); ordered.splice(to, 0, moved); setCategories(ordered); localStorage.setItem('bon_category_order', JSON.stringify(ordered.map(c => c.id))); draggedCategory.current = null; }}
+                      onClick={() => { setSelectedCategoryId(cat.id); setMenuSearch(''); }}
                       className={`px-4 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap transition-all ${
                         selectedCategoryId === cat.id ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10'
                       }`}
@@ -1389,6 +1397,8 @@ export default function POSPage() {
                 )}
               </div>
 
+              <div className="text-xs text-amber-300">{items.filter(item => item.stock && item.stock.quantity < item.stock.minimum).length > 0 && `تنبيه: ${items.filter(item => item.stock && item.stock.quantity < item.stock.minimum).length} أصناف تحت حد النواقص عند آخر تحديث`}</div>
+              <div className="flex items-center gap-3"><input aria-label="بحث في القسم" value={menuSearch} onChange={event => setMenuSearch(event.target.value)} placeholder="ابحث عن صنف في القسم" className="flex-1 rounded-lg bg-slate-950 border border-white/10 px-3 py-2 text-sm" /><span className="text-xs text-gray-300">عدد الأصناف: {items.length}</span></div>
               <div className="flex-1 overflow-y-auto pl-1">
                 {loadingPOS && items.length === 0 ? (
                   <div className="h-full flex items-center justify-center">
@@ -1397,7 +1407,8 @@ export default function POSPage() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
                     {items
-                      .filter((i) => i.categoryId === selectedCategoryId)
+                      .filter((i) => i.categoryId === selectedCategoryId && i.name.toLocaleLowerCase('ar').includes(menuSearch.trim().toLocaleLowerCase('ar')))
+                      .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
                       .map((item) => (
                         <div key={item.id} className="flex flex-col gap-1">
                         <button
@@ -1405,6 +1416,7 @@ export default function POSPage() {
                           className="glass-panel-hover flex flex-col justify-between p-3.5 rounded-xl text-right bg-slate-900/40 border border-white/5 h-[95px] cursor-pointer hover:border-cyan-500/30"
                         >
                           <span className="font-semibold text-xs text-white line-clamp-2">{item.name}</span>
+                          {item.stock && <span className={`text-[10px] ${item.stock.quantity < item.stock.minimum ? "text-rose-400" : "text-gray-400"}`}>الرصيد عند آخر تحديث: {item.stock.quantity} {({ unit: "قطعة", kg: "كجم", g: "جرام" } as Record<string, string>)[item.stock.unit] || item.stock.unit}</span>}
                           <div className="flex items-center justify-between w-full mt-2 flex-row-reverse">
                             <span className="text-cyan-400 font-bold text-xs">EGP {item.price.toFixed(2)}</span>
                             <PlusCircle className="w-4 h-4 text-cyan-400/80" />
@@ -1413,7 +1425,7 @@ export default function POSPage() {
                         <button type="button" onClick={(event) => handleOpenModifiers(event, item)} className="text-xs rounded-lg border border-white/10 p-1.5 text-cyan-300 hover:bg-white/10">إضافات وملاحظة</button>
                         </div>
                       ))}
-                    {!loadingPOS && items.filter((i) => i.categoryId === selectedCategoryId).length === 0 && (
+                    {!loadingPOS && items.filter((i) => i.categoryId === selectedCategoryId && i.name.toLocaleLowerCase('ar').includes(menuSearch.trim().toLocaleLowerCase('ar'))).length === 0 && (
                       <div className="col-span-full py-16 text-center text-gray-500 text-xs">
                         لا توجد أصناف في هذا القسم حالياً
                       </div>
