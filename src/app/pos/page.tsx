@@ -742,7 +742,7 @@ export default function POSPage() {
   };
 
   // 5. Complete / Place Order
-  const handleCompleteOrder = async () => {
+  const handleCompleteOrder = async (shouldPrint = true) => {
     if (confirmingOrderRef.current) return;
     if (!cart || (!uncertainOrder && paymentMethod !== 'CASH_OUT' && cart.items.length === 0)) {
       triggerAlert('error', 'الفاتورة فاضية مقدرش أقفلها');
@@ -765,6 +765,7 @@ export default function POSPage() {
     }
 
     try {
+      const printReceipt = uncertainOrder ? localStorage.getItem('bon_uncertain_print') !== 'false' : shouldPrint;
       const orderId = generateUUID();
       const clientCustomer = customers.find((c) => c.id === selectedCustomerId);
 
@@ -812,6 +813,7 @@ export default function POSPage() {
         confirmingOrderRef.current = true;
         setConfirmingOrder(true);
         localStorage.setItem('bon_uncertain_stock_order', JSON.stringify(newOrder));
+        localStorage.setItem('bon_uncertain_print', String(printReceipt));
         setUncertainOrder(newOrder);
         let response: Response;
         try { response = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orders: [newOrder] }) }); }
@@ -820,7 +822,7 @@ export default function POSPage() {
         try { result = await response.json(); } catch { confirmingOrderRef.current = false; setConfirmingOrder(false); setVerificationMessage('رد الخادم غير واضح. أعد المحاولة للتحقق من نفس الفاتورة.'); return; }
         if (!response.ok || !result.syncedIds?.includes(newOrder.id)) {
           const message = result.errors?.[0]?.message || 'تعذر التأكد من الفاتورة؛ أعد المحاولة بنفس الفاتورة.';
-          if (response.ok && (message.includes('المخزون غير كاف') || message.includes('كمية الصنف غير صالحة'))) { localStorage.removeItem('bon_uncertain_stock_order'); setUncertainOrder(null); void loadPOSData(); triggerAlert('error', message); } else { setVerificationMessage(message); }
+          if (response.ok && (message.includes('المخزون غير كاف') || message.includes('كمية الصنف غير صالحة'))) { localStorage.removeItem('bon_uncertain_stock_order'); localStorage.removeItem('bon_uncertain_print'); setUncertainOrder(null); void loadPOSData(); triggerAlert('error', message); } else { setVerificationMessage(message); }
           confirmingOrderRef.current = false; setConfirmingOrder(false); return;
         }
         newOrder.syncStatus = 'SYNCED';
@@ -859,7 +861,7 @@ export default function POSPage() {
       // Clear active cart
       const orderCartId = newOrder.tableId || 'takeaway';
       await offlineDB.carts.delete(orderCartId);
-      if (mustVerify) { localStorage.removeItem('bon_uncertain_stock_order'); setUncertainOrder(null); confirmingOrderRef.current = false; setConfirmingOrder(false); void loadPOSData(); }
+      if (mustVerify) { localStorage.removeItem('bon_uncertain_stock_order'); localStorage.removeItem('bon_uncertain_print'); setUncertainOrder(null); confirmingOrderRef.current = false; setConfirmingOrder(false); void loadPOSData(); }
       setCart({
         ...cart,
         items: [],
@@ -879,11 +881,11 @@ export default function POSPage() {
       setPaymentMethod('CASH');
 
       // 4. Trigger print
-      setReceiptOrder(newOrder);
-      setShowPrintModal(true);
-      setTimeout(() => {
-        window.print();
-      }, 150);
+      if (printReceipt) {
+        setReceiptOrder(newOrder);
+        setShowPrintModal(true);
+        setTimeout(() => window.print(), 150);
+      }
 
       triggerAlert('success', 'تم حفظ الأوردر وتقفيل الحساب!');
       triggerSync();
@@ -1353,7 +1355,7 @@ export default function POSPage() {
           {/* Tables & Items Grid */}
           <section className={`flex-1 flex flex-col p-4 overflow-hidden gap-4 ${mobileTab === 'menu' ? 'flex' : 'hidden lg:flex'}`}>
             {/* Floor Plan */}
-            <div className="glass-panel rounded-xl p-4 shrink-0 flex flex-col gap-3">
+            <div className="glass-panel rounded-xl p-2 shrink-0 max-h-[25%] overflow-y-auto flex flex-col gap-1">
               <div className="flex items-center justify-between border-b border-white/5 pb-2 flex-row-reverse">
                 <form onSubmit={e => { e.preventDefault(); handleBarcode(barcodeInput); setBarcodeInput(''); }} className="flex gap-2 mb-3" role="search">
                 <input aria-label="باركود المنتج" value={barcodeInput} onChange={e => setBarcodeInput(e.target.value)} placeholder="امسح الباركود أو اكتبه هنا" autoComplete="off" dir="ltr" className="min-w-0 flex-1 rounded-xl border border-amber-500/40 bg-slate-950 px-3 py-2 text-sm text-white" />
@@ -1389,15 +1391,15 @@ export default function POSPage() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[120px] overflow-y-auto pl-1">
+              <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1 max-h-[72px] overflow-y-auto pl-1">
                 {tables
                   .filter((t) => t.hallId === activeHallId)
-                  .sort((a, b) => { const isEleven = (name: string) => /(?:table|تيبول|ترابيزة|طاولة)\s*11$/i.test(name.trim()); return Number(isEleven(a.name)) - Number(isEleven(b.name)) || a.name.localeCompare(b.name, undefined, { numeric: true }); })
+                  .sort((a, b) => { const isEleven = (name: string) => /(?:table|تيبول|ترابيزة|طاولة)\s*11(?:\s*\(bar\))?$/i.test(name.trim()); return Number(isEleven(a.name)) - Number(isEleven(b.name)) || a.name.localeCompare(b.name, undefined, { numeric: true }); })
                   .map((table) => (
                     <button
                       key={table.id}
                       onClick={() => { if (!ensureActiveShift()) return; if (useAppStore.getState().activeTableId !== table.id) { setCart(null); setActiveTableId(table.id); } }}
-                      className={`flex flex-col items-center justify-center p-2 rounded-lg text-xs font-medium border transition-all h-[52px] ${
+                      className={`flex flex-col items-center justify-center p-2 rounded-lg text-xs font-medium border transition-all h-[38px] ${
                         activeTableId === table.id
                           ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-md'
                           : table.status === 'OCCUPIED'
@@ -1414,7 +1416,7 @@ export default function POSPage() {
 
             {/* Menu Items Grid */}
             <div className="flex-1 glass-panel rounded-xl p-4 flex flex-col gap-4 overflow-hidden">
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 border-b border-white/5 pb-3 max-h-44 overflow-y-auto shrink-0">
+              <div className="grid grid-cols-3 sm:grid-cols-6 xl:grid-cols-7 gap-1 border-b border-white/5 pb-2 max-h-[20%] overflow-y-auto shrink-0">
                 {loadingPOS && categories.length === 0 ? (
                   <div className="flex items-center gap-2 py-1 px-3 text-xs text-cyan-300/80 animate-pulse">
                     <Database className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
@@ -1429,7 +1431,7 @@ export default function POSPage() {
                       onDragOver={event => event.preventDefault()}
                       onDrop={event => { event.preventDefault(); const from = categories.findIndex(c => c.id === draggedCategory.current); const to = categories.findIndex(c => c.id === cat.id); if (from < 0 || to < 0 || from === to) return; const ordered = [...categories]; const [moved] = ordered.splice(from, 1); ordered.splice(to, 0, moved); setCategories(ordered); localStorage.setItem('bon_category_order', JSON.stringify(ordered.map(c => c.id))); draggedCategory.current = null; }}
                       onClick={() => { setSelectedCategoryId(cat.id); setMenuSearch(''); }}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap transition-all ${
+                      className={`min-w-0 px-1 py-1.5 rounded-xl text-xs font-semibold border truncate transition-all ${
                         selectedCategoryId === cat.id ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10'
                       }`}
                     >
@@ -1440,7 +1442,7 @@ export default function POSPage() {
               </div>
 
               <div className="text-xs text-amber-300">{items.filter(item => item.stock && (item.stock.quantity <= 0 || item.stock.quantity < item.stock.minimum)).length > 0 && `تنبيه: ${items.filter(item => item.stock && (item.stock.quantity <= 0 || item.stock.quantity < item.stock.minimum)).length} أصناف تحت حد النواقص عند آخر تحديث`}</div>
-              <div className="flex items-center gap-3"><input aria-label="بحث في القسم" value={menuSearch} onChange={event => setMenuSearch(event.target.value)} placeholder="ابحث عن صنف في القسم" className="flex-1 rounded-lg bg-slate-950 border border-white/10 px-3 py-2 text-sm" /><span className="text-xs text-gray-300">عدد الأصناف: {items.length}</span></div>
+              <div className="flex items-center gap-3"><input aria-label="بحث في القسم" value={menuSearch} onChange={event => setMenuSearch(event.target.value)} placeholder="ابحث عن صنف في القسم" className="flex-1 rounded-lg bg-slate-950 border border-white/10 px-3 py-2 text-sm" /><span className="text-xs text-gray-300">عدد أصناف القسم: {items.filter(item => item.categoryId === selectedCategoryId).length}</span></div>
               <div className="flex-1 overflow-y-auto pl-1">
                 {loadingPOS && items.length === 0 ? (
                   <div className="h-full flex items-center justify-center">
@@ -1943,9 +1945,10 @@ export default function POSPage() {
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 <button type="button" onClick={() => setShowPaymentConfirm(false)} className="py-2.5 border border-white/10 text-white rounded-xl text-xs">رجوع</button>
-                <button type="button" onClick={() => { setShowPaymentConfirm(false); handleCompleteOrder(); }} className="py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold rounded-xl text-xs">
+                <button type="button" onClick={() => { setShowPaymentConfirm(false); void handleCompleteOrder(false); }} className="py-2.5 bg-emerald-700 text-white font-bold rounded-xl text-xs">تأكيد</button>
+                <button type="button" onClick={() => { setShowPaymentConfirm(false); void handleCompleteOrder(true); }} className="py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold rounded-xl text-xs">
                   تأكيد وطباعة
                 </button>
               </div>

@@ -201,6 +201,11 @@ export default function AdminPage() {
 
   // 5. Product Costs & Profitability State
   const [productCosts, setProductCosts] = useState<ProductCostItem[]>([]);
+  const [productCostSearch, setProductCostSearch] = useState('');
+  const [productCostCategory, setProductCostCategory] = useState('');
+  const filteredProductCosts = productCosts.filter(item => (!productCostCategory || item.categoryName === productCostCategory) && item.name.toLocaleLowerCase('ar').includes(productCostSearch.trim().toLocaleLowerCase('ar'))).sort((a, b) => a.categoryName.localeCompare(b.categoryName, 'ar') || a.name.localeCompare(b.name, 'ar'));
+  const filteredUnitCosts = filteredProductCosts.reduce((sum, item) => sum + item.unitCost, 0);
+  const trackedStockValue = filteredProductCosts.reduce((sum, item) => sum + (item.stock ? item.stock.quantity * item.unitCost : 0), 0);
   const [barcodeAvailable, setBarcodeAvailable] = useState<boolean | null>(null);
   const [totalTodayProfit, setTotalTodayProfit] = useState(0);
   // Add Menu Item State
@@ -241,6 +246,7 @@ export default function AdminPage() {
 
   // 6. Inventory & Wastage State
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const lowStockCount = rawMaterials.filter(material => material.stockQty <= 0 || material.stockQty < material.minStockLevel).length;
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryCategory, setInventoryCategory] = useState('');
   const [wastageLogs, setWastageLogs] = useState<WastageSummary[]>([]);
@@ -486,6 +492,13 @@ export default function AdminPage() {
       void fetchCustomersAndReasons(); void fetchInventory();
     });
   }, [fetchAnalytics, fetchSuppliersAndPurchases, fetchCustomersAndReasons, fetchInventory]);
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') void fetchInventory(); };
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [fetchInventory]);
 
   useEffect(() => {
     return scheduleEffect(() => {
@@ -1334,6 +1347,7 @@ export default function AdminPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {lowStockCount > 0 && <button type="button" onClick={() => setActiveTab('inventory')} className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-300" aria-label={`تنبيه النواقص ${lowStockCount}`}><AlertTriangle className="inline h-4 w-4 ml-1" />النواقص: {lowStockCount}</button>}
             {(loadingAnalytics || loadingPurchases || loadingCustomers || loadingCosts || loadingInventory || loadingLedger || loadingExpenses || loadingReport) && (
               <NeonBadge label="جاري تحديث البيانات..." />
             )}
@@ -1342,6 +1356,7 @@ export default function AdminPage() {
                 fetchAnalytics();
                 fetchSuppliersAndPurchases();
                 fetchCustomersAndReasons();
+                fetchInventory();
                 if (activeTab === 'profitability') fetchProductCosts();
                 if (activeTab === 'reports') fetchDetailedReport();
                 if (activeTab === 'expenses') fetchExpenses();
@@ -2410,8 +2425,8 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-amber-500/30 bg-slate-900/60 p-4 space-y-3">
-                  <h4 className="font-bold text-sm text-amber-300">استيراد أصناف من Excel</h4>
+                <div className="rounded-xl border border-amber-500/30 bg-slate-900/60 p-2 space-y-1">
+                  <h4 className="font-bold text-xs text-amber-300">استيراد أصناف من Excel</h4>
                   {barcodeAvailable === false && <p className="rounded-lg border border-amber-500/40 p-2 text-xs text-amber-200">تسجيل الباركود يتطلب تجهيز قاعدة البيانات أولاً. تقدر تستورد أصناف بدون باركود لحين التجهيز.</p>}
                   <a href="/api/items/import" className="inline-block text-xs text-amber-300 underline">تحميل نموذج Excel فارغ</a>
                   <p className="text-xs text-gray-300">ملف xlsx: الصف الأول يحتوي اسم المنتج، القسم، سعر البيع، ويمكن إضافة التكلفة والباركود والكمية والوحدة وحد النواقص. احفظ الباركود كنص للحفاظ على الأصفار في بدايته. الاستيراد يضيف أصنافًا جديدة فقط.</p>
@@ -2423,6 +2438,11 @@ export default function AdminPage() {
                   {importPreview && <div className="max-h-56 overflow-auto text-xs space-y-2"><p>عدد الأصناف: {importPreview.rows.length} — الأخطاء: {importPreview.errors.length}</p>{importPreview.errors.map((error, index) => <p className="text-red-300" key={index}>{error}</p>)}{importPreview.rows.slice(0, 50).map(row => <p key={row.row}>{row.row}. {row.categoryName} — {row.name} — {row.price} ج — تكلفة {row.cost} {row.barcode ? `— باركود ${row.barcode}` : ''}</p>)}{importPreview.rows.length > 50 && <p>يتم عرض أول 50 صفًا فقط.</p>}</div>}
                 </div>
 
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input aria-label="بحث الأصناف والتكلفة" value={productCostSearch} onChange={e => setProductCostSearch(e.target.value)} placeholder="ابحث باسم الصنف" className="rounded-lg bg-slate-950 border border-white/10 p-2 text-sm" />
+                  <select aria-label="قسم الأصناف والتكلفة" value={productCostCategory} onChange={e => setProductCostCategory(e.target.value)} className="rounded-lg bg-slate-950 border border-white/10 p-2 text-sm"><option value="">كل الأصناف</option>{Array.from(new Set(productCosts.map(item => item.categoryName))).sort((a,b) => a.localeCompare(b,'ar')).map(category => <option key={category} value={category}>{category}</option>)}</select>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-gray-300"><span>عدد الأصناف المعروضة: {filteredProductCosts.length}</span><span>مجموع تكلفة وحدة من كل صنف معروض: EGP {filteredUnitCosts.toFixed(2)}</span><span>قيمة المخزون المسجل للأصناف المعروضة: EGP {trackedStockValue.toFixed(2)}</span><span>بدون رصيد مسجل: {filteredProductCosts.filter(item => !item.stock).length}</span></div>
                 <div className="overflow-x-auto rounded-xl border border-white/5">
                   <table className="w-full text-right text-xs">
                     <thead className="bg-slate-900/80 text-gray-400 border-b border-white/5">
@@ -2446,14 +2466,14 @@ export default function AdminPage() {
                             <NeonSpinner label="جاري تحميل قائمة الأصناف والتكاليف..." />
                           </td>
                         </tr>
-                      ) : productCosts.length === 0 ? (
+                      ) : filteredProductCosts.length === 0 ? (
                         <tr>
                           <td colSpan={10} className="p-8 text-center text-gray-500">
-                            لا توجد أصناف مسجلة حالياً
+                            لا توجد أصناف مطابقة للاختيار أو البحث
                           </td>
                         </tr>
                       ) : (
-                        productCosts.map((item) => (
+                        filteredProductCosts.map((item) => (
                           <tr key={item.id} className="hover:bg-white/5">
                             <td className="p-3 font-semibold text-white">{item.name}</td>
                             <td className="p-3 text-gray-400">{item.categoryName}</td>
