@@ -266,8 +266,9 @@ body {
 
 /* Print layout for receipts (KOT / Customer Invoice) */
 @media print {
-  @page { margin: 10mm; size: auto; }
-  @page bon-receipt { margin: 0; size: 76mm auto; }
+  /* Let the printer driver choose the paper; keep receipt content inside its printable width. */
+  @page { margin: 0; size: auto; }
+  @page bon-receipt { margin: 0; size: auto; }
   @page bon-report { margin: 10mm; size: auto; }
   html, body {
     background: #ffffff !important;
@@ -296,7 +297,7 @@ body {
   .print-area {
     page: bon-receipt;
     display: block !important;
-    width: 72mm !important; /* 72mm matches the exact thermal print head of 80mm printers like XP-80C */
+    width: 100% !important;
     max-width: 72mm !important;
     height: auto !important;
     min-height: 0 !important;
@@ -351,7 +352,28 @@ body {
     box-shadow: none !important;
   }
   body.print-admin-report .admin-report-print { page: bon-report; }
-  body.print-admin-receipt .admin-receipt-print { page: bon-receipt; width: 72mm !important; }
+  body.print-admin-receipt .admin-receipt-print {
+    page: bon-receipt;
+    width: 100% !important;
+    max-width: 72mm !important;
+    padding: 1mm !important;
+    box-sizing: border-box !important;
+  }
+  /* The on-screen receipt scrolls after a few items; paper must include all rows. */
+  body.print-admin-receipt .admin-receipt-print .max-h-48 {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  body.print-admin-receipt .admin-receipt-print table {
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  body.print-admin-receipt .admin-receipt-print th:first-child { width: 50%; }
+  body.print-admin-receipt .admin-receipt-print th:nth-child(2) { width: 16%; }
+  body.print-admin-receipt .admin-receipt-print th:nth-child(3) { width: 34%; }
+  body.print-admin-receipt .admin-receipt-print th,
+  body.print-admin-receipt .admin-receipt-print td { overflow-wrap: anywhere; }
+
   body.print-admin-report .admin-report-print *, body.print-admin-receipt .admin-receipt-print * {
     color: black !important; background: white !important; border-color: #999 !important;
   }
