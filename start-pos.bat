@@ -6,7 +6,7 @@ if errorlevel 1 (
   start "" /min node "node_modules\next\dist\bin\next" start
   timeout /t 5 /nobreak >nul
 )
-set "EDGE_FLAGS=--kiosk-printing --user-data-dir="%LOCALAPPDATA%\BonElMoonPOS\edge-pos-profile" --no-first-run --no-default-browser-check --disable-features=Translate --app=http://localhost:3000"
-set "CHROME_FLAGS=--kiosk-printing --user-data-dir="%LOCALAPPDATA%\BonElMoonPOS\chrome-pos-profile" --no-first-run --no-default-browser-check --disable-features=Translate --app=http://localhost:3000"
+set "EDGE_FLAGS=--user-data-dir="%LOCALAPPDATA%\BonElMoonPOS\edge-pos-profile" --no-first-run --no-default-browser-check --disable-features=Translate --app=http://localhost:3000"
+set "CHROME_FLAGS=--user-data-dir="%LOCALAPPDATA%\BonElMoonPOS\chrome-pos-profile" --no-first-run --no-default-browser-check --disable-features=Translate --app=http://localhost:3000"
 start msedge %EDGE_FLAGS% 2>nul || start chrome %CHROME_FLAGS% 2>nul || start http://localhost:3000
 exit
