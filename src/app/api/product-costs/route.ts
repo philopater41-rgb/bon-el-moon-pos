@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getBarcodes } from '@/lib/barcodes';
 import { itemStockMarker } from '@/lib/item-stock';
+import { markupPercent } from '@/lib/pricing';
 
 export async function GET() {
   try {
@@ -67,6 +68,7 @@ export async function GET() {
       const legacy = matches.length === 1 ? matches[0] : null;
       const profitPerUnit = item.price - totalUnitCost;
       const profitMarginPct = item.price > 0 ? (profitPerUnit / item.price) * 100 : 0;
+      const markup = markupPercent(totalUnitCost, item.price);
       const qtySoldToday = todaySoldMap.get(item.id) || 0;
       const totalRevenueToday = qtySoldToday * item.price;
       const totalCostToday = qtySoldToday * totalUnitCost;
@@ -84,6 +86,7 @@ export async function GET() {
         unitCost: Number(totalUnitCost.toFixed(2)),
         profitPerUnit: Number(profitPerUnit.toFixed(2)),
         profitMarginPct: Number(profitMarginPct.toFixed(1)),
+        markupPct: markup === null ? null : Number(markup.toFixed(1)),
         ingredients: ingredientsBreakdown,
         hasRecipe: item.recipe.length > 0,
         qtySoldToday,

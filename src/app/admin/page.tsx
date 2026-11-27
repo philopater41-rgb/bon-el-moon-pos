@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { addCalendarDays, cairoDateKey } from '@/lib/cairo-date';
+import { markupPercent, priceFromMarkup, costFromMarkup } from '@/lib/pricing';
 import type { Supplier, Customer, DiscountReason, RawMaterial, PurchaseInvoice, PurchaseInvoiceItem, WastageLog } from '@prisma/client';
 import { useAppStore } from '@/lib/store';
 import { 
@@ -101,6 +102,7 @@ interface ProductCostItem {
   unitCost: number;
   profitPerUnit: number;
   profitMarginPct: number;
+  markupPct: number | null;
   hasRecipe: boolean;
   qtySoldToday: number;
   totalRevenueToday: number;
@@ -835,102 +837,50 @@ export default function AdminPage() {
     }
   };
 
-  // Auto-calculators for New Item Pricing Trio (Cost, Price, Margin)
-  const handleNewCostChange = (val: string) => {
-    setNewItemCost(val);
-    const c = parseFloat(val);
-    const p = parseFloat(newItemPrice);
-    const m = parseFloat(newItemMargin);
-    if (!isNaN(c) && c >= 0) {
-      if (!isNaN(p) && p > 0) {
-        const margin = ((p - c) / p) * 100;
-        setNewItemMargin(margin.toFixed(1));
-      } else if (!isNaN(m) && m < 100 && m >= 0) {
-        const price = c / (1 - m / 100);
-        setNewItemPrice(price.toFixed(2));
-      }
-    }
+  // The editable percentage is profit as a percentage of cost.
+  const handleNewCostChange = (value: string) => {
+    setNewItemCost(value);
+    const cost = parseFloat(value), price = parseFloat(newItemPrice), percent = parseFloat(newItemMargin);
+    const markup = markupPercent(cost, price);
+    if (markup !== null) setNewItemMargin(markup.toFixed(1));
+    else if (!Number.isFinite(price)) { const calculated = priceFromMarkup(cost, percent); if (calculated !== null) setNewItemPrice(calculated.toFixed(2)); }
+    else setNewItemMargin('');
   };
-
-  const handleNewPriceChange = (val: string) => {
-    setNewItemPrice(val);
-    const p = parseFloat(val);
-    const c = parseFloat(newItemCost);
-    const m = parseFloat(newItemMargin);
-    if (!isNaN(p) && p > 0) {
-      if (!isNaN(c) && c >= 0) {
-        const margin = ((p - c) / p) * 100;
-        setNewItemMargin(margin.toFixed(1));
-      } else if (!isNaN(m) && m < 100 && m >= 0) {
-        const cost = p * (1 - m / 100);
-        setNewItemCost(cost.toFixed(2));
-      }
-    }
+  const handleNewPriceChange = (value: string) => {
+    setNewItemPrice(value);
+    const price = parseFloat(value), cost = parseFloat(newItemCost), percent = parseFloat(newItemMargin);
+    const markup = markupPercent(cost, price);
+    if (markup !== null) setNewItemMargin(markup.toFixed(1));
+    else if (!Number.isFinite(cost)) { const calculated = costFromMarkup(price, percent); if (calculated !== null) setNewItemCost(calculated.toFixed(2)); }
+    else setNewItemMargin('');
   };
-
-  const handleNewMarginChange = (val: string) => {
-    setNewItemMargin(val);
-    const m = parseFloat(val);
-    const c = parseFloat(newItemCost);
-    const p = parseFloat(newItemPrice);
-    if (!isNaN(m) && m < 100 && m >= 0) {
-      if (!isNaN(c) && c > 0) {
-        const price = c / (1 - m / 100);
-        setNewItemPrice(price.toFixed(2));
-      } else if (!isNaN(p) && p > 0) {
-        const cost = p * (1 - m / 100);
-        setNewItemCost(cost.toFixed(2));
-      }
-    }
+  const handleNewMarginChange = (value: string) => {
+    setNewItemMargin(value);
+    const percent = parseFloat(value), cost = parseFloat(newItemCost), price = parseFloat(newItemPrice);
+    if (Number.isFinite(cost)) { const calculated = priceFromMarkup(cost, percent); if (calculated !== null) setNewItemPrice(calculated.toFixed(2)); }
+    else { const calculated = costFromMarkup(price, percent); if (calculated !== null) setNewItemCost(calculated.toFixed(2)); }
   };
-
-  // Auto-calculators for Edit Item Pricing Trio (Cost, Price, Margin)
-  const handleEditCostChange = (val: string) => {
-    setEditItemCost(val);
-    const c = parseFloat(val);
-    const p = parseFloat(editItemPrice);
-    const m = parseFloat(editItemMargin);
-    if (!isNaN(c) && c >= 0) {
-      if (!isNaN(p) && p > 0) {
-        const margin = ((p - c) / p) * 100;
-        setEditItemMargin(margin.toFixed(1));
-      } else if (!isNaN(m) && m < 100 && m >= 0) {
-        const price = c / (1 - m / 100);
-        setEditItemPrice(price.toFixed(2));
-      }
-    }
+  const handleEditCostChange = (value: string) => {
+    setEditItemCost(value);
+    const cost = parseFloat(value), price = parseFloat(editItemPrice), percent = parseFloat(editItemMargin);
+    const markup = markupPercent(cost, price);
+    if (markup !== null) setEditItemMargin(markup.toFixed(1));
+    else if (!Number.isFinite(price)) { const calculated = priceFromMarkup(cost, percent); if (calculated !== null) setEditItemPrice(calculated.toFixed(2)); }
+    else setEditItemMargin('');
   };
-
-  const handleEditPriceChange = (val: string) => {
-    setEditItemPrice(val);
-    const p = parseFloat(val);
-    const c = parseFloat(editItemCost);
-    const m = parseFloat(editItemMargin);
-    if (!isNaN(p) && p > 0) {
-      if (!isNaN(c) && c >= 0) {
-        const margin = ((p - c) / p) * 100;
-        setEditItemMargin(margin.toFixed(1));
-      } else if (!isNaN(m) && m < 100 && m >= 0) {
-        const cost = p * (1 - m / 100);
-        setEditItemCost(cost.toFixed(2));
-      }
-    }
+  const handleEditPriceChange = (value: string) => {
+    setEditItemPrice(value);
+    const price = parseFloat(value), cost = parseFloat(editItemCost), percent = parseFloat(editItemMargin);
+    const markup = markupPercent(cost, price);
+    if (markup !== null) setEditItemMargin(markup.toFixed(1));
+    else if (!Number.isFinite(cost)) { const calculated = costFromMarkup(price, percent); if (calculated !== null) setEditItemCost(calculated.toFixed(2)); }
+    else setEditItemMargin('');
   };
-
-  const handleEditMarginChange = (val: string) => {
-    setEditItemMargin(val);
-    const m = parseFloat(val);
-    const c = parseFloat(editItemCost);
-    const p = parseFloat(editItemPrice);
-    if (!isNaN(m) && m < 100 && m >= 0) {
-      if (!isNaN(c) && c > 0) {
-        const price = c / (1 - m / 100);
-        setEditItemPrice(price.toFixed(2));
-      } else if (!isNaN(p) && p > 0) {
-        const cost = p * (1 - m / 100);
-        setEditItemCost(cost.toFixed(2));
-      }
-    }
+  const handleEditMarginChange = (value: string) => {
+    setEditItemMargin(value);
+    const percent = parseFloat(value), cost = parseFloat(editItemCost), price = parseFloat(editItemPrice);
+    if (Number.isFinite(cost)) { const calculated = priceFromMarkup(cost, percent); if (calculated !== null) setEditItemPrice(calculated.toFixed(2)); }
+    else { const calculated = costFromMarkup(price, percent); if (calculated !== null) setEditItemCost(calculated.toFixed(2)); }
   };
 
   const handleImportItems = async (commit: boolean) => {
@@ -1008,8 +958,8 @@ export default function AdminPage() {
     setEditItemPrice(item.price.toString());
     const effectiveCost = item.cost || item.unitCost || 0;
     setEditItemCost(effectiveCost > 0 ? effectiveCost.toString() : '');
-    const margin = item.price > 0 && effectiveCost >= 0 ? ((item.price - effectiveCost) / item.price) * 100 : 0;
-    setEditItemMargin(margin > 0 ? margin.toFixed(1) : '');
+    const margin = markupPercent(effectiveCost, item.price);
+    setEditItemMargin(margin === null ? '' : margin.toFixed(1));
     setShowEditItemRecipeSection(item.hasRecipe);
     const preloaded = (item.ingredients || [])
       .filter((ing) => ing.rawMaterialId && ing.rawMaterialId !== item.stock?.materialId)
@@ -2452,7 +2402,7 @@ export default function AdminPage() {
                         <th className="p-3">سعر البيع</th>
                         <th className="p-3">التكلفة الفعلية</th>
                         <th className="p-3">هامش الربح / قطعة</th>
-                        <th className="p-3">نسبة الربحية %</th>
+                        <th className="p-3">الربح على التكلفة %</th>
                         <th className="p-3">رصيد المخزون</th>
                         <th className="p-3">مبيعات اليوم (قطع)</th>
                         <th className="p-3">صافي ربح اليوم</th>
@@ -2480,7 +2430,7 @@ export default function AdminPage() {
                             <td className="p-3 font-mono text-cyan-400">EGP {item.price.toFixed(2)}</td>
                             <td className="p-3 font-mono text-amber-400">EGP {item.unitCost.toFixed(2)}</td>
                             <td className="p-3 font-mono text-emerald-400">EGP {item.profitPerUnit.toFixed(2)}</td>
-                            <td className="p-3 font-bold text-purple-300">{item.profitMarginPct}%</td>
+                            <td className="p-3 font-bold text-purple-300">{typeof item.markupPct !== 'number' ? 'غير متاحة' : `${item.markupPct}%`}</td>
                             <td className="p-3 text-amber-300">{item.stock ? `${item.stock.quantity} ${{ unit: 'قطعة', kg: 'كجم', g: 'جرام' }[item.stock.unit]}` : <span className="text-gray-500">غير مربوط بالمخزون</span>}</td>
                             <td className="p-3 font-bold text-white">{item.qtySoldToday}</td>
                             <td className="p-3 font-mono font-bold text-emerald-400">EGP {item.totalProfitToday.toFixed(2)}</td>
@@ -3395,10 +3345,10 @@ export default function AdminPage() {
 
       {/* MODALS: Add Menu Item with Pricing Calculator & Optional Recipe */}
       {showAddItemModal && (() => {
-        const c = parseFloat(newItemCost) || 0;
-        const p = parseFloat(newItemPrice) || 0;
-        const profit = p - c;
-        const margin = p > 0 ? (profit / p) * 100 : 0;
+        const c = parseFloat(newItemCost);
+        const p = parseFloat(newItemPrice);
+        const profit = (p || 0) - (c || 0);
+        const margin = markupPercent(c, p);
 
         return (
           <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowAddItemModal(false)}>
@@ -3411,7 +3361,7 @@ export default function AdminPage() {
                 <span>إضافة صنف جديد للمنيو وحاسبة التسعير والربح</span>
               </h3>
               <p className="text-xs text-gray-400 mb-4">
-                أدخل اسم الصنف والتكلفة وسعر البيع، وسيحسب النظام هامش الربح وصافي المكسب تلقائياً
+                أدخل اسم الصنف والتكلفة وسعر البيع، وسيحسب النظام الربح الإجمالي ونسبته على التكلفة
               </p>
 
               <form onSubmit={handleCreateMenuItem} className="space-y-4">
@@ -3478,6 +3428,7 @@ export default function AdminPage() {
                         step="any"
                         min="0"
                         value={newItemCost}
+                          aria-label="سعر التكلفة"
                         onChange={(e) => handleNewCostChange(e.target.value)}
                         placeholder="0.00"
                         className="w-full bg-slate-950 border border-amber-500/30 rounded-xl p-2.5 text-xs text-amber-300 font-mono text-right placeholder-gray-600 focus:border-amber-400 font-semibold"
@@ -3496,6 +3447,7 @@ export default function AdminPage() {
                         step="any"
                         min="0"
                         value={newItemPrice}
+                          aria-label="سعر البيع"
                         onChange={(e) => handleNewPriceChange(e.target.value)}
                         placeholder="0.00"
                         className="w-full bg-slate-950 border border-cyan-500/30 rounded-xl p-2.5 text-xs text-cyan-300 font-mono text-right placeholder-gray-600 focus:border-cyan-400 font-bold"
@@ -3505,14 +3457,15 @@ export default function AdminPage() {
                     {/* 3. Margin % */}
                     <div>
                       <label className="block text-xs text-gray-300 mb-1">
-                        نسبة هامش الربح %
-                        <span className="text-[10px] text-gray-400 mr-1">(نسبة المكسب)</span>
+                        نسبة الربح على التكلفة %
+                        <span className="text-[10px] text-gray-400 mr-1">(المكسب ÷ التكلفة)</span>
                       </label>
                       <div className="relative">
                         <input
                           type="number"
                           step="any"
                           value={newItemMargin}
+                          aria-label="نسبة الربح على التكلفة"
                           onChange={(e) => handleNewMarginChange(e.target.value)}
                           placeholder="0.0"
                           className="w-full bg-slate-950 border border-purple-500/30 rounded-xl p-2.5 pr-8 text-xs text-purple-300 font-mono text-right placeholder-gray-600 focus:border-purple-400 font-semibold"
@@ -3525,15 +3478,15 @@ export default function AdminPage() {
                   {/* Realtime KPI Banner */}
                   <div className="flex flex-col sm:flex-row items-center justify-between bg-slate-950 p-2.5 px-4 rounded-xl border border-white/5 text-xs gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400">صافي المكسب للقطعة:</span>
+                      <span className="text-gray-400">الربح الإجمالي للوحدة:</span>
                       <span className={`font-mono font-bold text-sm ${profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         EGP {profit.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400">نسبة الربحية الإجمالية:</span>
-                      <span className={`font-mono font-bold text-sm ${margin >= 30 ? 'text-emerald-300' : margin >= 15 ? 'text-amber-300' : 'text-rose-400'}`}>
-                        {margin.toFixed(1)}%
+                      <span className="text-gray-400">نسبة الربح على التكلفة:</span>
+                      <span className={`font-mono font-bold text-sm ${margin === null ? 'text-gray-400' : margin >= 30 ? 'text-emerald-300' : margin >= 15 ? 'text-amber-300' : 'text-rose-400'}`}>
+                        {margin === null ? 'غير متاحة (التكلفة صفر أو غير مسجلة)' : `${margin.toFixed(1)}%`}
                       </span>
                     </div>
                   </div>
@@ -3732,10 +3685,10 @@ export default function AdminPage() {
 
       {/* MODALS: Edit Menu Item with Pricing Calculator & Optional Recipe */}
       {showEditItemModal && selectedItemToEdit && (() => {
-        const c = parseFloat(editItemCost) || 0;
-        const p = parseFloat(editItemPrice) || 0;
-        const profit = p - c;
-        const margin = p > 0 ? (profit / p) * 100 : 0;
+        const c = parseFloat(editItemCost);
+        const p = parseFloat(editItemPrice);
+        const profit = (p || 0) - (c || 0);
+        const margin = markupPercent(c, p);
 
         return (
           <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowEditItemModal(false)}>
@@ -3814,6 +3767,7 @@ export default function AdminPage() {
                         step="any"
                         min="0"
                         value={editItemCost}
+                          aria-label="سعر التكلفة"
                         onChange={(e) => handleEditCostChange(e.target.value)}
                         placeholder="0.00"
                         className="w-full bg-slate-950 border border-amber-500/30 rounded-xl p-2.5 text-xs text-amber-300 font-mono text-right placeholder-gray-600 focus:border-amber-400 font-semibold"
@@ -3832,6 +3786,7 @@ export default function AdminPage() {
                         step="any"
                         min="0"
                         value={editItemPrice}
+                          aria-label="سعر البيع"
                         onChange={(e) => handleEditPriceChange(e.target.value)}
                         placeholder="0.00"
                         className="w-full bg-slate-950 border border-cyan-500/30 rounded-xl p-2.5 text-xs text-cyan-300 font-mono text-right placeholder-gray-600 focus:border-cyan-400 font-bold"
@@ -3841,14 +3796,15 @@ export default function AdminPage() {
                     {/* 3. Margin % */}
                     <div>
                       <label className="block text-xs text-gray-300 mb-1">
-                        نسبة هامش الربح %
-                        <span className="text-[10px] text-gray-400 mr-1">(نسبة المكسب)</span>
+                        نسبة الربح على التكلفة %
+                        <span className="text-[10px] text-gray-400 mr-1">(المكسب ÷ التكلفة)</span>
                       </label>
                       <div className="relative">
                         <input
                           type="number"
                           step="any"
                           value={editItemMargin}
+                          aria-label="نسبة الربح على التكلفة"
                           onChange={(e) => handleEditMarginChange(e.target.value)}
                           placeholder="0.0"
                           className="w-full bg-slate-950 border border-purple-500/30 rounded-xl p-2.5 pr-8 text-xs text-purple-300 font-mono text-right placeholder-gray-600 focus:border-purple-400 font-semibold"
@@ -3861,15 +3817,15 @@ export default function AdminPage() {
                   {/* Realtime KPI Banner */}
                   <div className="flex flex-col sm:flex-row items-center justify-between bg-slate-950 p-2.5 px-4 rounded-xl border border-white/5 text-xs gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400">صافي المكسب للقطعة:</span>
+                      <span className="text-gray-400">الربح الإجمالي للوحدة:</span>
                       <span className={`font-mono font-bold text-sm ${profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         EGP {profit.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400">نسبة الربحية الإجمالية:</span>
-                      <span className={`font-mono font-bold text-sm ${margin >= 30 ? 'text-emerald-300' : margin >= 15 ? 'text-amber-300' : 'text-rose-400'}`}>
-                        {margin.toFixed(1)}%
+                      <span className="text-gray-400">نسبة الربح على التكلفة:</span>
+                      <span className={`font-mono font-bold text-sm ${margin === null ? 'text-gray-400' : margin >= 30 ? 'text-emerald-300' : margin >= 15 ? 'text-amber-300' : 'text-rose-400'}`}>
+                        {margin === null ? 'غير متاحة (التكلفة صفر أو غير مسجلة)' : `${margin.toFixed(1)}%`}
                       </span>
                     </div>
                   </div>
