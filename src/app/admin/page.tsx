@@ -2443,9 +2443,9 @@ export default function AdminPage() {
                   <select aria-label="قسم الأصناف والتكلفة" value={productCostCategory} onChange={e => setProductCostCategory(e.target.value)} className="rounded-lg bg-slate-950 border border-white/10 p-2 text-sm"><option value="">كل الأصناف</option>{Array.from(new Set(productCosts.map(item => item.categoryName))).sort((a,b) => a.localeCompare(b,'ar')).map(category => <option key={category} value={category}>{category}</option>)}</select>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-gray-300"><span>عدد الأصناف المعروضة: {filteredProductCosts.length}</span><span>مجموع تكلفة وحدة من كل صنف معروض: EGP {filteredUnitCosts.toFixed(2)}</span><span>قيمة المخزون المسجل للأصناف المعروضة: EGP {trackedStockValue.toFixed(2)}</span><span>بدون رصيد مسجل: {filteredProductCosts.filter(item => !item.stock).length}</span></div>
-                <div className="overflow-x-auto rounded-xl border border-white/5">
+                <div role="region" aria-label="جدول التكلفة والمكسب" tabIndex={0} className="max-h-[60vh] overflow-auto rounded-xl border border-white/5">
                   <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-900/80 text-gray-400 border-b border-white/5">
+                    <thead className="sticky top-0 z-10 bg-slate-950 text-gray-400 border-b border-white/5">
                       <tr>
                         <th className="p-3">اسم الصنف</th>
                         <th className="p-3">القسم</th>
@@ -2544,9 +2544,9 @@ export default function AdminPage() {
               <div className="glass-panel p-5 rounded-2xl border border-white/5 space-y-3">
                 <h4 className="text-xs font-bold text-white">أرصدة الخامات الحالية</h4>
                 <div className="flex flex-wrap gap-2"><input aria-label="بحث في المخزون" value={inventorySearch} onChange={e => setInventorySearch(e.target.value)} placeholder="ابحث في المخزون" className="rounded-lg bg-slate-950 border border-white/10 p-2 text-sm" /><select aria-label="قسم المخزون" value={inventoryCategory} onChange={e => setInventoryCategory(e.target.value)} className="rounded-lg bg-slate-950 border border-white/10 p-2 text-sm"><option value="">كل الأقسام</option>{Array.from(new Set(productCosts.map(item => item.categoryName))).sort((a,b) => a.localeCompare(b,'ar')).map(category => <option key={category} value={category}>{category}</option>)}<option value="__unlinked">خامات غير مربوطة بقسم</option></select></div>
-                <div className="overflow-x-auto rounded-xl border border-white/5">
+                <div role="region" aria-label="جدول أرصدة المخزون" tabIndex={0} className="max-h-[60vh] overflow-auto rounded-xl border border-white/5">
                   <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-900/80 text-gray-400 border-b border-white/5">
+                    <thead className="sticky top-0 z-10 bg-slate-950 text-gray-400 border-b border-white/5">
                       <tr>
                         <th className="p-3">اسم الخامة</th>
                         <th className="p-3">الرصيد المتاح</th>
@@ -2613,9 +2613,9 @@ export default function AdminPage() {
               {/* Wastage Logs Table */}
               <div className="glass-panel p-5 rounded-2xl border border-white/5 space-y-3">
                 <h4 className="text-xs font-bold text-white">سجل الهالك والتلفيات</h4>
-                <div className="overflow-x-auto rounded-xl border border-white/5">
+                <div role="region" aria-label="جدول الهالك" tabIndex={0} className="max-h-[60vh] overflow-auto rounded-xl border border-white/5">
                   <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-900/80 text-gray-400 border-b border-white/5">
+                    <thead className="sticky top-0 z-10 bg-slate-950 text-gray-400 border-b border-white/5">
                       <tr>
                         <th className="p-3">الخامة</th>
                         <th className="p-3">الكمية التالفة</th>
