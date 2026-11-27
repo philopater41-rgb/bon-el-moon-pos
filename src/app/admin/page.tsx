@@ -4484,6 +4484,7 @@ export default function AdminPage() {
                 <Image width={128} height={128} unoptimized loading="eager" src="/bon-logo.jpg" alt="BON el MOON" className="w-full h-full object-cover" />
               </div>
               <h2 className="font-black text-xl text-gray-900 tracking-wide">BON el MOON</h2>
+              <p lang="ar" dir="rtl" className="text-base font-bold text-gray-900">بن المون</p>
               <p className="text-xs text-gray-500 font-semibold">إيصال مبيعات</p>
               <span className="inline-block mt-1 font-mono font-bold text-xs bg-gray-100 px-3 py-1 rounded-full text-gray-800 border border-gray-200">
                 {selectedOrderReceipt.receiptNumber || `#${selectedOrderReceipt.id}`}

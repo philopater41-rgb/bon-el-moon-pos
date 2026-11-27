@@ -1115,6 +1115,8 @@ export default function POSPage() {
       <div className={`receipt-layout ${preview ? 'receipt-preview' : ''}`} dir="rtl">
         <div className="receipt-brand">
           <Image width={128} height={128} unoptimized loading="eager" src="/bon-logo.jpg" alt="BON el MOON" className="receipt-logo" />
+          <div lang="en" dir="ltr">BON el MOON</div>
+          <div lang="ar" dir="rtl">بن المون</div>
         </div>
 
         <div className="receipt-meta-grid">
